@@ -34,6 +34,9 @@ jobs:
       - name: Build
         run: npx ng build --base-href=/Mortgage-Comparison/
 
+      - name: Configure SPA route fallback
+        run: cp dist/mortgage-comparison/browser/index.html dist/mortgage-comparison/browser/404.html
+
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
         with:

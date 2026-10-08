@@ -45,7 +45,8 @@ This will compile your project and store the build artifacts in the `dist/` dire
 
 The `Deploy to GitHub Pages` workflow deploys the app automatically when changes
 are pushed to `main`. It uses Node.js 24 and builds with the repository's base
-path, `/Mortgage-Comparison/`.
+path, `/Mortgage-Comparison/`, and configures a fallback page so direct visits
+and reloads on Angular routes such as `/Mortgage-Comparison/mortgages` work.
 
 In the repository settings, go to **Settings → Pages** and set the build and
 deployment source to **GitHub Actions**. After the workflow succeeds, the site

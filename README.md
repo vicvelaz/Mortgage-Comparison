@@ -41,6 +41,22 @@ ng build
 
 This will compile your project and store the build artifacts in the `dist/` directory. By default, the production build optimizes your application for performance and speed.
 
+## Deploying to GitHub Pages
+
+The `Deploy to GitHub Pages` workflow deploys the app automatically when changes
+are pushed to `main`. It uses Node.js 24 and builds with the repository's base
+path, `/Mortgage-Comparison/`.
+
+In the repository settings, go to **Settings → Pages** and set the build and
+deployment source to **GitHub Actions**. After the workflow succeeds, the site
+is available at <https://vicvelaz.github.io/Mortgage-Comparison/>.
+
+To build locally for GitHub Pages, use:
+
+```bash
+npx ng build --base-href=/Mortgage-Comparison/
+```
+
 ## Running unit tests
 
 To execute unit tests with the [Vitest](https://vitest.dev/) test runner, use the following command:

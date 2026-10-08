@@ -1,8 +1,8 @@
 <div class="app-frame">
   <aside class="sidebar">
-    <a class="brand" routerLink="/dashboard" aria-label="Hipoteca Clara, inicio">
-      <span class="brand-mark">HC</span>
-      <span><strong>Hipoteca</strong><small>CLARA</small></span>
+    <a class="brand" routerLink="/dashboard" aria-label="Inicio">
+      <span class="brand-mark">CH</span>
+      <span><small>COMPARADOR DE</small><strong>HIPOTECAS</strong></span>
     </a>
 
     <div class="nav-caption">ESPACIO DE TRABAJO</div>
@@ -27,13 +27,29 @@
 
   <main class="main-area">
     <header class="topbar">
-      <div class="breadcrumb"><span>HIPOTECA CLARA</span><span class="crumb-slash">/</span>{{ activeView() === 'dashboard' ? 'Resumen' : activeView() === 'mortgages' ? 'Mis ofertas' : 'Comparador' }}</div>
+      <div class="breadcrumb">
+        <span>COMPARADOR DE HIPOTECAS</span><span class="crumb-slash">/</span
+        >{{
+          activeView() === 'dashboard'
+            ? 'Resumen'
+            : activeView() === 'mortgages'
+              ? 'Mis ofertas'
+              : 'Comparador'
+        }}
+      </div>
       <div class="top-actions">
         <span class="save-status"><i></i>{{ status() }}</span>
-        <button class="button button-quiet" type="button" (click)="exportData()">Exportar JSON</button>
+        <button class="button button-quiet" type="button" (click)="exportData()">
+          Exportar JSON
+        </button>
         <label class="button button-outline import-button">
           Importar JSON
-          <input type="file" accept="application/json,.json" (change)="importData($event)" aria-label="Importar escenarios JSON" />
+          <input
+            type="file"
+            accept="application/json,.json"
+            (change)="importData($event)"
+            aria-label="Importar escenarios JSON"
+          />
         </label>
       </div>
     </header>
@@ -46,28 +62,48 @@
             <h1>Tu próxima hipoteca,<br /><em>con perspectiva.</em></h1>
             <p class="heading-note">Compara el coste real de cada oferta antes de decidir.</p>
           </div>
-          <button class="button button-primary" type="button" (click)="openNewMortgage()"><span class="plus">+</span> Nueva oferta</button>
+          <button class="button button-primary" type="button" (click)="openNewMortgage()">
+            <span class="plus">+</span> Nueva oferta
+          </button>
         </div>
 
         <div class="kpi-grid">
           <article class="kpi-card kpi-count">
-            <div class="kpi-top"><span>OFERTAS GUARDADAS</span><span class="kpi-index">01</span></div>
+            <div class="kpi-top">
+              <span>OFERTAS GUARDADAS</span><span class="kpi-index">01</span>
+            </div>
             <div class="kpi-value">{{ mortgages().length }}<small> hipotecas</small></div>
             <p>Escenarios en tu comparador</p>
           </article>
           <article class="kpi-card">
-            <div class="kpi-top"><span>MENOR COSTE TOTAL</span><span class="kpi-index">02</span></div>
-            <div class="kpi-value kpi-money">{{ cheapest() ? currency(calculateMortgageFor(cheapest()!.id).totalCost) : '—' }}</div>
+            <div class="kpi-top">
+              <span>MENOR COSTE TOTAL</span><span class="kpi-index">02</span>
+            </div>
+            <div class="kpi-value kpi-money">
+              {{ cheapest() ? currency(calculateMortgageFor(cheapest()!.id).totalCost) : '—' }}
+            </div>
             <p>{{ cheapest()?.name ?? 'Añade una oferta para empezar' }}</p>
           </article>
           <article class="kpi-card">
             <div class="kpi-top"><span>CUOTA MÁS BAJA</span><span class="kpi-index">03</span></div>
-            <div class="kpi-value kpi-money">{{ smallestPayment() ? currency(calculateMortgageFor(smallestPayment()!.id).firstPayment) : '—' }}</div>
+            <div class="kpi-value kpi-money">
+              {{
+                smallestPayment()
+                  ? currency(calculateMortgageFor(smallestPayment()!.id).firstPayment)
+                  : '—'
+              }}
+            </div>
             <p>{{ smallestPayment()?.name ?? 'Sin ofertas todavía' }}</p>
           </article>
           <article class="kpi-card">
             <div class="kpi-top"><span>MENOS INTERESES</span><span class="kpi-index">04</span></div>
-            <div class="kpi-value kpi-money">{{ leastInterest() ? currency(calculateMortgageFor(leastInterest()!.id).totalInterest) : '—' }}</div>
+            <div class="kpi-value kpi-money">
+              {{
+                leastInterest()
+                  ? currency(calculateMortgageFor(leastInterest()!.id).totalInterest)
+                  : '—'
+              }}
+            </div>
             <p>{{ leastInterest()?.name ?? 'Sin ofertas todavía' }}</p>
           </article>
         </div>
@@ -75,49 +111,89 @@
         <div class="dashboard-grid">
           <section class="panel chart-panel">
             <div class="panel-heading">
-              <div><p class="eyebrow">PROYECCIÓN</p><h2>Capital pendiente</h2></div>
+              <div>
+                <p class="eyebrow">PROYECCIÓN</p>
+                <h2>Capital pendiente</h2>
+              </div>
               <a routerLink="/comparison" class="text-link">Comparar ofertas <span>↗</span></a>
             </div>
             <p class="panel-subtitle">Evolución del saldo según las ofertas seleccionadas abajo.</p>
-            <div class="chart-frame"><canvas #overviewChart aria-label="Evolución comparativa del capital pendiente"></canvas></div>
+            <div class="chart-frame">
+              <canvas
+                #overviewChart
+                aria-label="Evolución comparativa del capital pendiente"
+              ></canvas>
+            </div>
           </section>
 
           <section class="panel recent-panel">
             <div class="panel-heading">
-              <div><p class="eyebrow">VISTA RÁPIDA</p><h2>Ofertas recientes</h2></div>
+              <div>
+                <p class="eyebrow">VISTA RÁPIDA</p>
+                <h2>Ofertas recientes</h2>
+              </div>
               <a routerLink="/mortgages" class="text-link">Ver todas <span>↗</span></a>
             </div>
             <div class="recent-list">
               @for (item of mortgageResults().slice(0, 4); track item.mortgage.id) {
                 <button type="button" class="recent-row" (click)="editMortgage(item.mortgage)">
                   <span class="offer-avatar">{{ item.mortgage.bank.slice(0, 1) }}</span>
-                  <span class="recent-info"><strong>{{ item.mortgage.name }}</strong><small>{{ item.mortgage.bank }} · {{ item.mortgage.years }} años</small></span>
-                  <span class="recent-amount">{{ currency(item.result.firstPayment) }}<small>/mes</small></span>
+                  <span class="recent-info"
+                    ><strong>{{ item.mortgage.name }}</strong
+                    ><small>{{ item.mortgage.bank }} · {{ item.mortgage.years }} años</small></span
+                  >
+                  <span class="recent-amount"
+                    >{{ currency(item.result.firstPayment) }}<small>/mes</small></span
+                  >
                 </button>
               } @empty {
                 <p class="empty-state">Todavía no hay ofertas guardadas.</p>
               }
             </div>
             @if (mortgages().length > 0) {
-              <button class="button button-soft full-button" type="button" (click)="setView('comparison')">Abrir comparador</button>
+              <button
+                class="button button-soft full-button"
+                type="button"
+                (click)="setView('comparison')"
+              >
+                Abrir comparador
+              </button>
             }
           </section>
         </div>
 
         <section class="panel selection-panel">
           <div class="panel-heading selection-heading">
-            <div><p class="eyebrow">ESCENARIOS</p><h2>Elige qué quieres ver</h2></div>
+            <div>
+              <p class="eyebrow">ESCENARIOS</p>
+              <h2>Elige qué quieres ver</h2>
+            </div>
             <span class="selection-count">{{ selectedResults().length }} seleccionadas</span>
           </div>
           <div class="selection-list">
             @for (item of mortgageResults(); track item.mortgage.id) {
               <div class="selection-row">
-                <mat-checkbox [checked]="isSelected(item.mortgage.id)" (change)="toggleComparison(item.mortgage.id, $event.checked)"></mat-checkbox>
-                <span class="color-marker" [style.background]="markerColor(item.mortgage.id)"></span>
-                <span class="selection-name"><strong>{{ item.mortgage.name }}</strong><small>{{ item.mortgage.bank }}</small></span>
-                <span class="selection-rate">{{ item.mortgage.interestRate | number:'1.2-2' }}%</span>
-                <span class="selection-payment">{{ currency(item.result.firstPayment) }}<small>/ mes</small></span>
-                <button class="link-button" type="button" (click)="editMortgage(item.mortgage)">Editar</button>
+                <mat-checkbox
+                  [checked]="isSelected(item.mortgage.id)"
+                  (change)="toggleComparison(item.mortgage.id, $event.checked)"
+                ></mat-checkbox>
+                <span
+                  class="color-marker"
+                  [style.background]="markerColor(item.mortgage.id)"
+                ></span>
+                <span class="selection-name"
+                  ><strong>{{ item.mortgage.name }}</strong
+                  ><small>{{ item.mortgage.bank }}</small></span
+                >
+                <span class="selection-rate"
+                  >{{ item.mortgage.interestRate | number: '1.2-2' }}%</span
+                >
+                <span class="selection-payment"
+                  >{{ currency(item.result.firstPayment) }}<small>/ mes</small></span
+                >
+                <button class="link-button" type="button" (click)="editMortgage(item.mortgage)">
+                  Editar
+                </button>
               </div>
             } @empty {
               <p class="empty-state">Crea tu primera oferta para comenzar la comparación.</p>
@@ -128,78 +204,297 @@
 
       <section class="view" [hidden]="activeView() !== 'mortgages'">
         <div class="page-heading compact-heading">
-          <div><p class="eyebrow">GESTIÓN DE ESCENARIOS</p><h1>Mis ofertas</h1><p class="heading-note">Edita las condiciones y añade vinculaciones o amortizaciones.</p></div>
-          <button class="button button-primary" type="button" (click)="openNewMortgage()"><span class="plus">+</span> Nueva oferta</button>
+          <div>
+            <p class="eyebrow">GESTIÓN DE ESCENARIOS</p>
+            <h1>Mis ofertas</h1>
+            <p class="heading-note">
+              Edita las condiciones y añade vinculaciones o amortizaciones.
+            </p>
+          </div>
+          <button class="button button-primary" type="button" (click)="openNewMortgage()">
+            <span class="plus">+</span> Nueva oferta
+          </button>
         </div>
 
         <div class="editor-layout">
           <form class="panel mortgage-editor" (ngSubmit)="saveMortgage()">
-            <div class="panel-heading editor-heading"><div><p class="eyebrow">{{ editingId() ? 'EDITAR ESCENARIO' : 'NUEVO ESCENARIO' }}</p><h2>{{ draft.name || 'Datos de la hipoteca' }}</h2></div><span class="draft-tag">{{ rateTypeLabel(draft.rateType) }}</span></div>
+            <div class="panel-heading editor-heading">
+              <div>
+                <p class="eyebrow">{{ editingId() ? 'EDITAR ESCENARIO' : 'NUEVO ESCENARIO' }}</p>
+                <h2>{{ draft.name || 'Datos de la hipoteca' }}</h2>
+              </div>
+              <span class="draft-tag">{{ rateTypeLabel(draft.rateType) }}</span>
+            </div>
             <div class="form-grid">
-              <label class="field field-wide"><span>Nombre de la oferta</span><input name="name" [(ngModel)]="draft.name" placeholder="Ej. Fija bonificada" required /></label>
-              <label class="field"><span>Entidad financiera</span><input name="bank" [(ngModel)]="draft.bank" placeholder="Ej. Banco Central" required /></label>
-              <label class="field"><span>Tipo de interés anual (%)</span><input name="interestRate" type="number" min="0" step="0.01" [(ngModel)]="draft.interestRate" required /></label>
-              <label class="field"><span>Capital solicitado</span><div class="input-suffix"><input name="amount" type="number" min="1" step="1000" [(ngModel)]="draft.amount" required /><span>€</span></div></label>
-              <label class="field"><span>Plazo</span><div class="input-suffix"><input name="years" type="number" min="1" max="50" step="1" [(ngModel)]="draft.years" required /><span>años</span></div></label>
-              <label class="field"><span>Modalidad</span><select name="rateType" [(ngModel)]="draft.rateType"><option value="fixed">Tipo fijo</option><option value="variable">Tipo variable</option></select></label>
-              <label class="field"><span>Fecha estimada de inicio</span><input name="startDate" type="date" [(ngModel)]="draft.startDate" /></label>
+              <label class="field field-wide"
+                ><span>Nombre de la oferta</span
+                ><input
+                  name="name"
+                  [(ngModel)]="draft.name"
+                  placeholder="Ej. Fija bonificada"
+                  required
+              /></label>
+              <label class="field"
+                ><span>Entidad financiera</span
+                ><input
+                  name="bank"
+                  [(ngModel)]="draft.bank"
+                  placeholder="Ej. Banco Central"
+                  required
+              /></label>
+              <label class="field"
+                ><span>Tipo de interés anual (%)</span
+                ><input
+                  name="interestRate"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  [(ngModel)]="draft.interestRate"
+                  required
+              /></label>
+              <label class="field"
+                ><span>Capital solicitado</span>
+                <div class="input-suffix">
+                  <input
+                    name="amount"
+                    type="number"
+                    min="1"
+                    step="1000"
+                    [(ngModel)]="draft.amount"
+                    required
+                  /><span>€</span>
+                </div></label
+              >
+              <label class="field"
+                ><span>Plazo</span>
+                <div class="input-suffix">
+                  <input
+                    name="years"
+                    type="number"
+                    min="1"
+                    max="50"
+                    step="1"
+                    [(ngModel)]="draft.years"
+                    required
+                  /><span>años</span>
+                </div></label
+              >
+              <label class="field"
+                ><span>Modalidad</span
+                ><select name="rateType" [(ngModel)]="draft.rateType">
+                  <option value="fixed">Tipo fijo</option>
+                  <option value="variable">Tipo variable</option>
+                </select></label
+              >
+              <label class="field"
+                ><span>Fecha estimada de inicio</span
+                ><input name="startDate" type="date" [(ngModel)]="draft.startDate"
+              /></label>
             </div>
 
             <div class="editor-divider"></div>
-            <div class="subsection-heading"><div><p class="eyebrow">VINCULACIONES</p><h3>Bonificaciones</h3></div><span>{{ draft.bonuses.length }}</span></div>
+            <div class="subsection-heading">
+              <div>
+                <p class="eyebrow">VINCULACIONES</p>
+                <h3>Bonificaciones</h3>
+              </div>
+              <span>{{ draft.bonuses.length }}</span>
+            </div>
             @if (draft.bonuses.length > 0) {
               <div class="bonus-list">
                 @for (bonus of draft.bonuses; track bonus.id) {
                   <div class="bonus-row">
-                    <mat-checkbox [(ngModel)]="bonus.active" [name]="'bonus-active-' + bonus.id"></mat-checkbox>
-                    <span class="bonus-title"><strong>{{ bonus.name }}</strong><small>-{{ bonus.interestReduction | number:'1.2-2' }}% · {{ currency(bonus.annualCost) }}/año</small></span>
-                    <span class="bonus-period">{{ bonus.startMonth ?? 1 }}–{{ bonus.endMonth ?? 'fin' }}</span>
-                    <button type="button" class="icon-button remove-button" (click)="removeBonus(bonus.id)" [attr.aria-label]="'Eliminar ' + bonus.name">×</button>
+                    <mat-checkbox
+                      [(ngModel)]="bonus.active"
+                      [name]="'bonus-active-' + bonus.id"
+                    ></mat-checkbox>
+                    <span class="bonus-title"
+                      ><strong>{{ bonus.name }}</strong
+                      ><small
+                        >-{{ bonus.interestReduction | number: '1.2-2' }}% ·
+                        {{ currency(bonus.annualCost) }}/año</small
+                      ></span
+                    >
+                    <span class="bonus-period"
+                      >{{ bonus.startMonth ?? 1 }}–{{ bonus.endMonth ?? 'fin' }}</span
+                    >
+                    <button
+                      type="button"
+                      class="icon-button remove-button"
+                      (click)="removeBonus(bonus.id)"
+                      [attr.aria-label]="'Eliminar ' + bonus.name"
+                    >
+                      ×
+                    </button>
                   </div>
                 }
               </div>
             }
             <div class="inline-form bonus-form">
-              <label class="field"><span>Producto o condición</span><input name="bonusName" [(ngModel)]="bonusDraft.name" placeholder="Seguro hogar" /></label>
-              <label class="field"><span>Reducción (%)</span><input name="bonusReduction" type="number" min="0" step="0.05" [(ngModel)]="bonusDraft.interestReduction" /></label>
-              <label class="field"><span>Coste anual</span><div class="input-suffix"><input name="bonusCost" type="number" min="0" step="10" [(ngModel)]="bonusDraft.annualCost" /><span>€</span></div></label>
-              <label class="field"><span>Desde mes</span><input name="bonusStart" type="number" min="1" [(ngModel)]="bonusDraft.startMonth" /></label>
-              <label class="field"><span>Hasta mes</span><input name="bonusEnd" type="number" min="1" [(ngModel)]="bonusDraft.endMonth" placeholder="Fin" /></label>
-              <button class="button button-outline add-button" type="button" (click)="addBonus()">Añadir bono</button>
+              <label class="field"
+                ><span>Producto o condición</span
+                ><input name="bonusName" [(ngModel)]="bonusDraft.name" placeholder="Seguro hogar"
+              /></label>
+              <label class="field"
+                ><span>Reducción (%)</span
+                ><input
+                  name="bonusReduction"
+                  type="number"
+                  min="0"
+                  step="0.05"
+                  [(ngModel)]="bonusDraft.interestReduction"
+              /></label>
+              <label class="field"
+                ><span>Coste anual</span>
+                <div class="input-suffix">
+                  <input
+                    name="bonusCost"
+                    type="number"
+                    min="0"
+                    step="10"
+                    [(ngModel)]="bonusDraft.annualCost"
+                  /><span>€</span>
+                </div></label
+              >
+              <label class="field"
+                ><span>Desde mes</span
+                ><input name="bonusStart" type="number" min="1" [(ngModel)]="bonusDraft.startMonth"
+              /></label>
+              <label class="field"
+                ><span>Hasta mes</span
+                ><input
+                  name="bonusEnd"
+                  type="number"
+                  min="1"
+                  [(ngModel)]="bonusDraft.endMonth"
+                  placeholder="Fin"
+              /></label>
+              <button class="button button-outline add-button" type="button" (click)="addBonus()">
+                Añadir bono
+              </button>
             </div>
 
             <div class="editor-divider"></div>
-            <div class="subsection-heading"><div><p class="eyebrow">PAGOS EXTRAORDINARIOS</p><h3>Amortizaciones</h3></div><span>{{ draft.amortizations.length }}</span></div>
+            <div class="subsection-heading">
+              <div>
+                <p class="eyebrow">PAGOS EXTRAORDINARIOS</p>
+                <h3>Amortizaciones</h3>
+              </div>
+              <span>{{ draft.amortizations.length }}</span>
+            </div>
             @if (draft.amortizations.length > 0) {
               <div class="amortization-list">
                 @for (item of draft.amortizations; track item.id) {
-                  <div class="amortization-row"><span class="amort-icon">↘</span><span class="bonus-title"><strong>{{ item.type === 'single' ? 'Puntual' : 'Periódica' }} · {{ currency(item.amount) }}</strong><small>Mes {{ item.month }}{{ item.type === 'recurring' ? ' · cada ' + item.frequencyMonths + ' meses' : '' }}</small></span><button type="button" class="icon-button remove-button" (click)="removeAmortization(item.id)" aria-label="Eliminar amortización">×</button></div>
+                  <div class="amortization-row">
+                    <span class="amort-icon">↘</span
+                    ><span class="bonus-title"
+                      ><strong
+                        >{{ item.type === 'single' ? 'Puntual' : 'Periódica' }} ·
+                        {{ currency(item.amount) }}</strong
+                      ><small
+                        >Mes {{ item.month
+                        }}{{
+                          item.type === 'recurring'
+                            ? ' · cada ' + item.frequencyMonths + ' meses'
+                            : ''
+                        }}</small
+                      ></span
+                    ><button
+                      type="button"
+                      class="icon-button remove-button"
+                      (click)="removeAmortization(item.id)"
+                      aria-label="Eliminar amortización"
+                    >
+                      ×
+                    </button>
+                  </div>
                 }
               </div>
             }
             <div class="inline-form amortization-form">
-              <label class="field"><span>Frecuencia</span><select name="amortType" [(ngModel)]="amortizationDraft.type"><option value="single">Puntual</option><option value="recurring">Periódica</option></select></label>
-              <label class="field"><span>Importe</span><div class="input-suffix"><input name="amortAmount" type="number" min="1" step="100" [(ngModel)]="amortizationDraft.amount" /><span>€</span></div></label>
-              <label class="field"><span>Primer mes</span><input name="amortMonth" type="number" min="1" [(ngModel)]="amortizationDraft.month" /></label>
+              <label class="field"
+                ><span>Frecuencia</span
+                ><select name="amortType" [(ngModel)]="amortizationDraft.type">
+                  <option value="single">Puntual</option>
+                  <option value="recurring">Periódica</option>
+                </select></label
+              >
+              <label class="field"
+                ><span>Importe</span>
+                <div class="input-suffix">
+                  <input
+                    name="amortAmount"
+                    type="number"
+                    min="1"
+                    step="100"
+                    [(ngModel)]="amortizationDraft.amount"
+                  /><span>€</span>
+                </div></label
+              >
+              <label class="field"
+                ><span>Primer mes</span
+                ><input
+                  name="amortMonth"
+                  type="number"
+                  min="1"
+                  [(ngModel)]="amortizationDraft.month"
+              /></label>
               @if (amortizationDraft.type === 'recurring') {
-                <label class="field"><span>Repetir cada</span><div class="input-suffix"><input name="amortFrequency" type="number" min="1" [(ngModel)]="amortizationDraft.frequencyMonths" /><span>meses</span></div></label>
+                <label class="field"
+                  ><span>Repetir cada</span>
+                  <div class="input-suffix">
+                    <input
+                      name="amortFrequency"
+                      type="number"
+                      min="1"
+                      [(ngModel)]="amortizationDraft.frequencyMonths"
+                    /><span>meses</span>
+                  </div></label
+                >
               }
-              <button class="button button-outline add-button" type="button" (click)="addAmortization()">Añadir amortización</button>
+              <button
+                class="button button-outline add-button"
+                type="button"
+                (click)="addAmortization()"
+              >
+                Añadir amortización
+              </button>
             </div>
 
-            <div class="editor-footer"><p>Cuota recalculada a plazo restante. El tipo variable permanece constante.</p><button class="button button-primary" type="submit">Guardar oferta</button></div>
+            <div class="editor-footer">
+              <p>Cuota recalculada a plazo restante. El tipo variable permanece constante.</p>
+              <button class="button button-primary" type="submit">Guardar oferta</button>
+            </div>
           </form>
 
           <aside class="offer-list panel">
-            <div class="panel-heading"><div><p class="eyebrow">CARTERA</p><h2>Escenarios</h2></div><span class="selection-count">{{ mortgages().length }}</span></div>
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">CARTERA</p>
+                <h2>Escenarios</h2>
+              </div>
+              <span class="selection-count">{{ mortgages().length }}</span>
+            </div>
             @for (item of mortgageResults(); track item.mortgage.id) {
               <article class="offer-card" [class.offer-active]="editingId() === item.mortgage.id">
                 <button class="offer-card-main" type="button" (click)="editMortgage(item.mortgage)">
                   <span class="offer-avatar">{{ item.mortgage.bank.slice(0, 1) }}</span>
-                  <span class="recent-info"><strong>{{ item.mortgage.name }}</strong><small>{{ item.mortgage.bank }}</small></span>
+                  <span class="recent-info"
+                    ><strong>{{ item.mortgage.name }}</strong
+                    ><small>{{ item.mortgage.bank }}</small></span
+                  >
                 </button>
-                <div class="offer-card-metrics"><span>{{ currency(item.result.firstPayment) }}<small>/ mes</small></span><span>{{ item.mortgage.interestRate | number:'1.2-2' }}%</span></div>
-                <button type="button" class="link-button danger-link" (click)="deleteMortgage(item.mortgage)">Eliminar</button>
+                <div class="offer-card-metrics">
+                  <span>{{ currency(item.result.firstPayment) }}<small>/ mes</small></span
+                  ><span>{{ item.mortgage.interestRate | number: '1.2-2' }}%</span>
+                </div>
+                <button
+                  type="button"
+                  class="link-button danger-link"
+                  (click)="deleteMortgage(item.mortgage)"
+                >
+                  Eliminar
+                </button>
               </article>
             } @empty {
               <p class="empty-state">Aún no has creado ofertas.</p>
@@ -209,20 +504,63 @@
 
         @if (editingResult(); as detail) {
           <section class="panel schedule-panel">
-            <div class="panel-heading"><div><p class="eyebrow">DETALLE DE LA OFERTA</p><h2>Calendario de amortización · {{ detail.mortgage.name }}</h2></div><span class="schedule-caption">{{ detail.result.rows.length }} mensualidades</span></div>
-            <div class="detail-kpis">
-              <div><small>Cuota inicial</small><strong>{{ currency(detail.result.firstPayment) }}</strong></div>
-              <div><small>Intereses totales</small><strong>{{ currency(detail.result.totalInterest) }}</strong></div>
-              <div><small>Coste total</small><strong>{{ currency(detail.result.totalCost) }}</strong></div>
-              <div><small>Ahorro por amortizar</small><strong class="positive-value">{{ currency(detail.result.amortizationSavings) }}</strong></div>
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">DETALLE DE LA OFERTA</p>
+                <h2>Calendario de amortización · {{ detail.mortgage.name }}</h2>
+              </div>
+              <span class="schedule-caption">{{ detail.result.rows.length }} mensualidades</span>
             </div>
-            <div class="detail-chart-frame"><canvas #detailChart aria-label="Evolución del capital pendiente, intereses acumulados y capital amortizado"></canvas></div>
+            <div class="detail-kpis">
+              <div>
+                <small>Cuota inicial</small
+                ><strong>{{ currency(detail.result.firstPayment) }}</strong>
+              </div>
+              <div>
+                <small>Intereses totales</small
+                ><strong>{{ currency(detail.result.totalInterest) }}</strong>
+              </div>
+              <div>
+                <small>Coste total</small><strong>{{ currency(detail.result.totalCost) }}</strong>
+              </div>
+              <div>
+                <small>Ahorro por amortizar</small
+                ><strong class="positive-value">{{
+                  currency(detail.result.amortizationSavings)
+                }}</strong>
+              </div>
+            </div>
+            <div class="detail-chart-frame">
+              <canvas
+                #detailChart
+                aria-label="Evolución del capital pendiente, intereses acumulados y capital amortizado"
+              ></canvas>
+            </div>
             <div class="table-scroll schedule-table-wrap">
-              <table class="data-table"><thead><tr><th>Mes</th><th>Cuota</th><th>Interés</th><th>Capital</th><th>Extra</th><th>Capital pendiente</th></tr></thead><tbody>
-                @for (row of detail.result.rows; track row.month) {
-                  <tr><td>{{ row.month }}</td><td>{{ currency(row.payment) }}</td><td>{{ currency(row.interest) }}</td><td>{{ currency(row.principal) }}</td><td>{{ row.extraPayment ? currency(row.extraPayment) : '—' }}</td><td>{{ currency(row.remainingCapital) }}</td></tr>
-                }
-              </tbody></table>
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Mes</th>
+                    <th>Cuota</th>
+                    <th>Interés</th>
+                    <th>Capital</th>
+                    <th>Extra</th>
+                    <th>Capital pendiente</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (row of detail.result.rows; track row.month) {
+                    <tr>
+                      <td>{{ row.month }}</td>
+                      <td>{{ currency(row.payment) }}</td>
+                      <td>{{ currency(row.interest) }}</td>
+                      <td>{{ currency(row.principal) }}</td>
+                      <td>{{ row.extraPayment ? currency(row.extraPayment) : '—' }}</td>
+                      <td>{{ currency(row.remainingCapital) }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
             </div>
           </section>
         }
@@ -230,42 +568,176 @@
 
       <section class="view" [hidden]="activeView() !== 'comparison'">
         <div class="page-heading compact-heading">
-          <div><p class="eyebrow">ANÁLISIS COMPARATIVO</p><h1>Comparar escenarios</h1><p class="heading-note">Selecciona al menos dos ofertas para comparar coste, cuota y evolución.</p></div>
-          <a class="button button-primary" routerLink="/mortgages"><span class="plus">+</span> Gestionar ofertas</a>
+          <div>
+            <p class="eyebrow">ANÁLISIS COMPARATIVO</p>
+            <h1>Comparar escenarios</h1>
+            <p class="heading-note">
+              Selecciona al menos dos ofertas para comparar coste, cuota y evolución.
+            </p>
+          </div>
+          <a class="button button-primary" routerLink="/mortgages"
+            ><span class="plus">+</span> Gestionar ofertas</a
+          >
         </div>
         <section class="panel comparison-picker">
-          <div class="panel-heading"><div><p class="eyebrow">OFERTAS DISPONIBLES</p><h2>Escenarios incluidos</h2></div><span class="selection-count">{{ selectedResults().length }} seleccionadas</span></div>
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">OFERTAS DISPONIBLES</p>
+              <h2>Escenarios incluidos</h2>
+            </div>
+            <span class="selection-count">{{ selectedResults().length }} seleccionadas</span>
+          </div>
           <div class="picker-list">
             @for (item of mortgageResults(); track item.mortgage.id) {
-              <div class="picker-item"><mat-checkbox [checked]="isSelected(item.mortgage.id)" (change)="toggleComparison(item.mortgage.id, $event.checked)"></mat-checkbox><span class="color-marker" [style.background]="markerColor(item.mortgage.id)"></span><span class="selection-name"><strong>{{ item.mortgage.name }}</strong><small>{{ item.mortgage.bank }}</small></span><span class="picker-amount">{{ currency(item.mortgage.amount) }}</span></div>
-            } @empty { <p class="empty-state">Añade ofertas en “Mis ofertas” para comparar.</p> }
+              <div class="picker-item">
+                <mat-checkbox
+                  [checked]="isSelected(item.mortgage.id)"
+                  (change)="toggleComparison(item.mortgage.id, $event.checked)"
+                ></mat-checkbox
+                ><span
+                  class="color-marker"
+                  [style.background]="markerColor(item.mortgage.id)"
+                ></span
+                ><span class="selection-name"
+                  ><strong>{{ item.mortgage.name }}</strong
+                  ><small>{{ item.mortgage.bank }}</small></span
+                ><span class="picker-amount">{{ currency(item.mortgage.amount) }}</span>
+              </div>
+            } @empty {
+              <p class="empty-state">Añade ofertas en “Mis ofertas” para comparar.</p>
+            }
           </div>
         </section>
 
         @if (selectedResults().length < 2) {
-          <div class="notice"><span>i</span><p>Selecciona al menos dos hipotecas para ver la comparación.</p></div>
+          <div class="notice">
+            <span>i</span>
+            <p>Selecciona al menos dos hipotecas para ver la comparación.</p>
+          </div>
         }
         <div class="comparison-kpis">
-          <article class="comparison-metric"><span>MENOR COSTE TOTAL</span><strong>{{ selectedLowest('totalCost') ? currency(selectedLowest('totalCost')!.result.totalCost) : '—' }}</strong><small>{{ selectedLowest('totalCost')?.mortgage.name ?? 'Selecciona ofertas' }}</small></article>
-          <article class="comparison-metric"><span>CUOTA INICIAL MÁS BAJA</span><strong>{{ selectedLowest('firstPayment') ? currency(selectedLowest('firstPayment')!.result.firstPayment) : '—' }}</strong><small>{{ selectedLowest('firstPayment')?.mortgage.name ?? 'Selecciona ofertas' }}</small></article>
-          <article class="comparison-metric"><span>MENOS INTERESES</span><strong>{{ selectedLowest('totalInterest') ? currency(selectedLowest('totalInterest')!.result.totalInterest) : '—' }}</strong><small>{{ selectedLowest('totalInterest')?.mortgage.name ?? 'Selecciona ofertas' }}</small></article>
-          <article class="comparison-metric"><span>COSTE DE BONIFICACIONES</span><strong>{{ currency(totalBonuses()) }}</strong><small>En ofertas seleccionadas</small></article>
-          <article class="comparison-metric"><span>AHORRO POR AMORTIZACIONES</span><strong>{{ currency(totalSavings()) }}</strong><small>En ofertas seleccionadas</small></article>
+          <article class="comparison-metric">
+            <span>MENOR COSTE TOTAL</span
+            ><strong>{{
+              selectedLowest('totalCost')
+                ? currency(selectedLowest('totalCost')!.result.totalCost)
+                : '—'
+            }}</strong
+            ><small>{{ selectedLowest('totalCost')?.mortgage.name ?? 'Selecciona ofertas' }}</small>
+          </article>
+          <article class="comparison-metric">
+            <span>CUOTA INICIAL MÁS BAJA</span
+            ><strong>{{
+              selectedLowest('firstPayment')
+                ? currency(selectedLowest('firstPayment')!.result.firstPayment)
+                : '—'
+            }}</strong
+            ><small>{{
+              selectedLowest('firstPayment')?.mortgage.name ?? 'Selecciona ofertas'
+            }}</small>
+          </article>
+          <article class="comparison-metric">
+            <span>MENOS INTERESES</span
+            ><strong>{{
+              selectedLowest('totalInterest')
+                ? currency(selectedLowest('totalInterest')!.result.totalInterest)
+                : '—'
+            }}</strong
+            ><small>{{
+              selectedLowest('totalInterest')?.mortgage.name ?? 'Selecciona ofertas'
+            }}</small>
+          </article>
+          <article class="comparison-metric">
+            <span>COSTE DE BONIFICACIONES</span><strong>{{ currency(totalBonuses()) }}</strong
+            ><small>En ofertas seleccionadas</small>
+          </article>
+          <article class="comparison-metric">
+            <span>AHORRO POR AMORTIZACIONES</span><strong>{{ currency(totalSavings()) }}</strong
+            ><small>En ofertas seleccionadas</small>
+          </article>
         </div>
 
         <div class="comparison-charts">
-          <section class="panel chart-panel"><div class="panel-heading"><div><p class="eyebrow">COSTE FINANCIERO</p><h2>Desglose por oferta</h2></div></div><div class="chart-frame"><canvas #costChart aria-label="Gráfico de costes, intereses y bonificaciones"></canvas></div></section>
-          <section class="panel chart-panel"><div class="panel-heading"><div><p class="eyebrow">EVOLUCIÓN DEL SALDO</p><h2>Capital pendiente</h2></div></div><div class="chart-frame"><canvas #comparisonChart aria-label="Gráfico comparativo de capital pendiente"></canvas></div></section>
+          <section class="panel chart-panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">COSTE FINANCIERO</p>
+                <h2>Desglose por oferta</h2>
+              </div>
+            </div>
+            <div class="chart-frame">
+              <canvas
+                #costChart
+                aria-label="Gráfico de costes, intereses y bonificaciones"
+              ></canvas>
+            </div>
+          </section>
+          <section class="panel chart-panel">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">EVOLUCIÓN DEL SALDO</p>
+                <h2>Capital pendiente</h2>
+              </div>
+            </div>
+            <div class="chart-frame">
+              <canvas
+                #comparisonChart
+                aria-label="Gráfico comparativo de capital pendiente"
+              ></canvas>
+            </div>
+          </section>
         </div>
 
         <section class="panel comparison-table-panel">
-          <div class="panel-heading"><div><p class="eyebrow">RESUMEN DE OFERTAS</p><h2>Comparativa detallada</h2></div></div>
-          <div class="table-scroll"><table class="data-table comparison-table"><thead><tr><th>Oferta</th><th>Tipo</th><th>Interés inicial</th><th>Cuota inicial</th><th>Intereses</th><th>Bonificaciones</th><th>Coste total</th><th>Ahorro amortiz.</th></tr></thead><tbody>
-            @for (item of selectedResults(); track item.mortgage.id) {
-              <tr><td><strong>{{ item.mortgage.name }}</strong><small>{{ item.mortgage.bank }}</small></td><td>{{ rateTypeLabel(item.mortgage.rateType) }}</td><td>{{ item.mortgage.interestRate | number:'1.2-2' }}%</td><td>{{ currency(item.result.firstPayment) }}</td><td>{{ currency(item.result.totalInterest) }}</td><td>{{ currency(item.result.bonusCost) }}</td><td class="table-strong">{{ currency(item.result.totalCost) }}</td><td class="positive-value">{{ currency(item.result.amortizationSavings) }}</td></tr>
-            } @empty { <tr><td colspan="8" class="empty-cell">Selecciona ofertas para mostrar los resultados.</td></tr> }
-          </tbody></table></div>
-          <p class="method-note">Cálculo francés mensual. El tipo variable se mantiene constante en la proyección; no se modelan revisiones de índice.</p>
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">RESUMEN DE OFERTAS</p>
+              <h2>Comparativa detallada</h2>
+            </div>
+          </div>
+          <div class="table-scroll">
+            <table class="data-table comparison-table">
+              <thead>
+                <tr>
+                  <th>Oferta</th>
+                  <th>Tipo</th>
+                  <th>Interés inicial</th>
+                  <th>Cuota inicial</th>
+                  <th>Intereses</th>
+                  <th>Bonificaciones</th>
+                  <th>Coste total</th>
+                  <th>Ahorro amortiz.</th>
+                </tr>
+              </thead>
+              <tbody>
+                @for (item of selectedResults(); track item.mortgage.id) {
+                  <tr>
+                    <td>
+                      <strong>{{ item.mortgage.name }}</strong
+                      ><small>{{ item.mortgage.bank }}</small>
+                    </td>
+                    <td>{{ rateTypeLabel(item.mortgage.rateType) }}</td>
+                    <td>{{ item.mortgage.interestRate | number: '1.2-2' }}%</td>
+                    <td>{{ currency(item.result.firstPayment) }}</td>
+                    <td>{{ currency(item.result.totalInterest) }}</td>
+                    <td>{{ currency(item.result.bonusCost) }}</td>
+                    <td class="table-strong">{{ currency(item.result.totalCost) }}</td>
+                    <td class="positive-value">{{ currency(item.result.amortizationSavings) }}</td>
+                  </tr>
+                } @empty {
+                  <tr>
+                    <td colspan="8" class="empty-cell">
+                      Selecciona ofertas para mostrar los resultados.
+                    </td>
+                  </tr>
+                }
+              </tbody>
+            </table>
+          </div>
+          <p class="method-note">
+            Cálculo francés mensual. El tipo variable se mantiene constante en la proyección; no se
+            modelan revisiones de índice.
+          </p>
         </section>
       </section>
     </div>

@@ -3,6 +3,7 @@ import { provideRouter } from '@angular/router';
 import { App } from './app';
 import { routes } from './app.routes';
 import { Mortgage, calculateMortgage } from './mortgage-calculator';
+import { ChartViewportComponent } from './chart-viewport';
 
 describe('App', () => {
   beforeEach(async () => {
@@ -17,13 +18,47 @@ describe('App', () => {
     expect(fixture.componentInstance).toBeTruthy();
   });
 
-  it('calculates a zero-interest French schedule to the cent', () => {
+  it('expands only the chart content when zoom changes and restores its original width', () => {
+    const fixture = TestBed.createComponent(ChartViewportComponent);
+    fixture.componentRef.setInput('label', 'Capital pendiente');
+    fixture.detectChanges();
+    const element = fixture.nativeElement as HTMLElement;
+    const input = element.querySelector('input')!;
+    const content = element.querySelector<HTMLElement>('.chart-content')!;
+
+    expect(content.style.width).toBe('100%');
+    expect(input.getAttribute('aria-label')).toBe('Zoom: Capital pendiente');
+    input.value = '300';
+    input.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    expect(content.style.width).toBe('300%');
+    expect(element.querySelector('output')!.textContent).toBe('300%');
+
+    input.value = '100';
+    input.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    expect(content.style.width).toBe('100%');
+  });
+
+  it('preserves full precision in a zero-interest French schedule', () => {
     const result = calculateMortgage(createMortgage({ amount: 10000, years: 1, interestRate: 0 }));
     expect(result.rows).toHaveLength(12);
-    expect(result.firstPayment).toBe(833.33);
+    expect(result.firstPayment).toBeCloseTo(10000 / 12, 12);
+    expect(result.firstPayment).not.toBe(833.33);
     expect(result.totalInterest).toBe(0);
     expect(result.remainingCapital).toBe(0);
     expect(result.totalCost).toBe(10000);
+  });
+
+  it('keeps the payment formula stable for rates close to zero', () => {
+    const result = calculateMortgage(createMortgage({
+      amount: 10000,
+      years: 1,
+      interestRate: 1.2e-14,
+    }));
+
+    expect(Number.isFinite(result.firstPayment)).toBe(true);
+    expect(result.firstPayment).toBeCloseTo(10000 / 12, 12);
   });
 
   it('preserves the annual bonus cost across monthly periods', () => {
@@ -33,8 +68,8 @@ describe('App', () => {
       interestRate: 0,
       bonuses: [{ id: 'home', name: 'Hogar', active: true, interestReduction: 0, annualCost: 100 }],
     }));
-    expect(result.bonusCost).toBe(100);
-    expect(result.totalCost).toBe(12100);
+    expect(result.bonusCost).toBeCloseTo(100, 10);
+    expect(result.totalCost).toBeCloseTo(12100, 10);
   });
 
   it('applies a limited bonus and extra principal in the specified month', () => {
@@ -45,8 +80,8 @@ describe('App', () => {
       bonuses: [{ id: 'salary', name: 'Nómina', active: true, interestReduction: 1, annualCost: 120, startMonth: 1, endMonth: 1 }],
       amortizations: [createAmortization({ id: 'extra', amount: 5000, month: 2 })],
     }));
-    expect(result.rows[0].interest).toBe(166.67);
-    expect(result.rows[1].interest).toBe(248.12);
+    expect(result.rows[0].interest).toBeCloseTo(166.6666666667, 10);
+    expect(result.rows[1].interest).toBeCloseTo(248.12, 2);
     expect(result.rows[1].extraPayment).toBe(5000);
     expect(result.rows[1].payment).toBeLessThan(1000);
     expect(result.amortizationSavings).toBeGreaterThan(0);
@@ -71,7 +106,7 @@ describe('App', () => {
     }));
 
     expect(termReduction.rows.length).toBeLessThan(paymentReduction.rows.length);
-    expect(termReduction.rows[1].payment).toBe(1666.67);
+    expect(termReduction.rows[1].payment).toBeCloseTo(50000 / 30, 10);
     expect(paymentReduction.rows[1].payment).toBeLessThan(termReduction.rows[1].payment);
     expect(paymentReduction.rows[0].amortizationEvents).toEqual([
       { id: 'payment', name: 'Extra', amount: 5000 },
@@ -101,14 +136,14 @@ describe('App', () => {
       amortizations: [createAmortization({ amount: 1000, month: 12 })],
     }));
 
-    expect(result.amortizationInterestSavings[0].savings).toBe(415.93);
+    expect(result.amortizationInterestSavings[0].savings).toBeCloseTo(415.93, 2);
     const unbonifiedResult = calculateMortgage(createMortgage({
       amount: 110000,
       years: 30,
       interestRate: 3.55,
       amortizations: [createAmortization({ amount: 1000, month: 12 })],
     }));
-    expect(unbonifiedResult.amortizationInterestSavings[0].savings).toBe(602.91);
+    expect(unbonifiedResult.amortizationInterestSavings[0].savings).toBeCloseTo(602.91, 2);
   });
 
   it('calculates term-reduction savings using the effective bonified rate', () => {
@@ -123,7 +158,7 @@ describe('App', () => {
       amortizations: [createAmortization({ reductionType: 'term', amount: 1000, month: 12 })],
     }));
 
-    expect(result.amortizationInterestSavings[0].savings).toBe(1084.8);
+    expect(result.amortizationInterestSavings[0].savings).toBeCloseTo(1084.8, 2);
   });
 
   it('chains same-month amortizations against the residual balance', () => {
@@ -150,6 +185,58 @@ describe('App', () => {
     expect(combined.totalInterest).toBe(equivalentSinglePayment.totalInterest);
   });
 
+  it('keeps mixed same-month amortizations independent of their insertion order', () => {
+    const amortizations = [
+      createAmortization({ id: 'term', reductionType: 'term', amount: 1000, month: 12 }),
+      createAmortization({ id: 'payment', reductionType: 'payment', amount: 500, month: 12 }),
+    ];
+    const forward = calculateMortgage(createMortgage({ amortizations }));
+    const reverse = calculateMortgage(createMortgage({ amortizations: [...amortizations].reverse() }));
+    const termPriority = calculateMortgage(createMortgage({
+      amortizations: amortizations.map((item) => ({ ...item, reductionType: 'term' })),
+    }));
+
+    expect(forward.totalInterest).toBeCloseTo(reverse.totalInterest, 10);
+    expect(forward.totalInterest).toBeCloseTo(termPriority.totalInterest, 10);
+  });
+
+  it('applies active bonuses only within their configured months', () => {
+    const mortgage = createMortgage({
+      years: 2,
+      interestRate: 3,
+      bonuses: [
+        {
+          id: 'limited',
+          name: 'Bono temporal',
+          active: true,
+          interestReduction: 1,
+          annualCost: 120,
+          startMonth: 2,
+          endMonth: 3,
+        },
+        {
+          id: 'disabled',
+          name: 'Bono desactivado',
+          active: false,
+          interestReduction: 2,
+          annualCost: 240,
+        },
+      ],
+      amortizations: [createAmortization({ amount: 1000, month: 2 })],
+    });
+    const result = calculateMortgage(mortgage);
+    const withoutAmortization = calculateMortgage({ ...mortgage, amortizations: [] });
+
+    expect(result.rows[0].interest).toBeCloseTo(250, 10);
+    expect(result.rows[1].interest).toBeCloseTo(result.rows[0].remainingCapital * (0.02 / 12), 10);
+    expect(result.rows[3].interest).toBeCloseTo(result.rows[2].remainingCapital * (0.03 / 12), 10);
+    expect(result.bonusCost).toBeCloseTo(20, 10);
+    expect(result.amortizationInterestSavings[0].savings).toBeCloseTo(
+      withoutAmortization.totalInterest - result.totalInterest,
+      10,
+    );
+  });
+
   it('applies later amortizations after the prior month has reduced the balance', () => {
     const result = calculateMortgage(createMortgage({
       amount: 110000,
@@ -161,9 +248,7 @@ describe('App', () => {
       ],
     }));
 
-    expect(result.rows[12].interest).toBe(
-      Math.round((result.rows[11].remainingCapital * (2.55 / 1200) + Number.EPSILON) * 100) / 100,
-    );
+    expect(result.rows[12].interest).toBeCloseTo(result.rows[11].remainingCapital * (2.55 / 1200), 12);
     expect(result.rows[12].amortizationEvents).toEqual([
       { id: 'next-month', name: 'Extra', amount: 500 },
     ]);

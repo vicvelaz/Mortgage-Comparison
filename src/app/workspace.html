@@ -118,12 +118,12 @@
               <a routerLink="/comparison" class="text-link">Comparar ofertas <span>↗</span></a>
             </div>
             <p class="panel-subtitle">Evolución del saldo según las ofertas seleccionadas abajo.</p>
-            <div class="chart-frame">
+            <app-chart-viewport class="chart-frame" label="Evolución comparativa del capital pendiente">
               <canvas
                 #overviewChart
                 aria-label="Evolución comparativa del capital pendiente"
               ></canvas>
-            </div>
+            </app-chart-viewport>
           </section>
 
           <section class="panel recent-panel">
@@ -217,284 +217,11 @@
         </div>
 
         <div class="editor-layout">
-          <form class="panel mortgage-editor" (ngSubmit)="saveMortgage()">
-            <div class="panel-heading editor-heading">
-              <div>
-                <p class="eyebrow">{{ editingId() ? 'EDITAR ESCENARIO' : 'NUEVO ESCENARIO' }}</p>
-                <h2>{{ draft.name || 'Datos de la hipoteca' }}</h2>
-              </div>
-              <span class="draft-tag">{{ rateTypeLabel(draft.rateType) }}</span>
-            </div>
-            <div class="form-grid">
-              <label class="field field-wide"
-                ><span>Nombre de la oferta</span
-                ><input
-                  name="name"
-                  [(ngModel)]="draft.name"
-                  placeholder="Ej. Fija bonificada"
-                  required
-              /></label>
-              <label class="field"
-                ><span>Entidad financiera</span
-                ><input
-                  name="bank"
-                  [(ngModel)]="draft.bank"
-                  placeholder="Ej. Banco Central"
-                  required
-              /></label>
-              <label class="field"
-                ><span>Tipo de interés anual (%)</span
-                ><input
-                  name="interestRate"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  [(ngModel)]="draft.interestRate"
-                  required
-              /></label>
-              <label class="field"
-                ><span>Capital solicitado</span>
-                <div class="input-suffix">
-                  <input
-                    name="amount"
-                    type="number"
-                    min="1"
-                    step="1000"
-                    [(ngModel)]="draft.amount"
-                    required
-                  /><span>€</span>
-                </div></label
-              >
-              <label class="field"
-                ><span>Plazo</span>
-                <div class="input-suffix">
-                  <input
-                    name="years"
-                    type="number"
-                    min="1"
-                    max="50"
-                    step="1"
-                    [(ngModel)]="draft.years"
-                    required
-                  /><span>años</span>
-                </div></label
-              >
-              <label class="field"
-                ><span>Modalidad</span
-                ><select name="rateType" [(ngModel)]="draft.rateType">
-                  <option value="fixed">Tipo fijo</option>
-                  <option value="variable">Tipo variable</option>
-                </select></label
-              >
-              <label class="field"
-                ><span>Fecha estimada de inicio</span
-                ><input name="startDate" type="date" [(ngModel)]="draft.startDate"
-              /></label>
-            </div>
-
-            <div class="editor-divider"></div>
-            <div class="subsection-heading">
-              <div>
-                <p class="eyebrow">VINCULACIONES</p>
-                <h3>Bonificaciones</h3>
-              </div>
-              <span>{{ draft.bonuses.length }}</span>
-            </div>
-            @if (draft.bonuses.length > 0) {
-              <div class="bonus-list">
-                @for (bonus of draft.bonuses; track bonus.id) {
-                  <div class="bonus-row">
-                    <mat-checkbox
-                      [(ngModel)]="bonus.active"
-                      [name]="'bonus-active-' + bonus.id"
-                    ></mat-checkbox>
-                    <span class="bonus-title"
-                      ><strong>{{ bonus.name }}</strong
-                      ><small
-                        >-{{ bonus.interestReduction | number: '1.2-2' }}% ·
-                        {{ currency(bonus.annualCost) }}/año</small
-                      ></span
-                    >
-                    <span class="bonus-period"
-                      >{{ bonus.startMonth ?? 1 }}–{{ bonus.endMonth ?? 'fin' }}</span
-                    >
-                    <button
-                      type="button"
-                      class="icon-button remove-button"
-                      (click)="removeBonus(bonus.id)"
-                      [attr.aria-label]="'Eliminar ' + bonus.name"
-                    >
-                      ×
-                    </button>
-                  </div>
-                }
-              </div>
-            }
-            <div class="inline-form bonus-form">
-              <label class="field"
-                ><span>Producto o condición</span
-                ><input name="bonusName" [(ngModel)]="bonusDraft.name" placeholder="Seguro hogar"
-              /></label>
-              <label class="field"
-                ><span>Reducción (%)</span
-                ><input
-                  name="bonusReduction"
-                  type="number"
-                  min="0"
-                  step="0.05"
-                  [(ngModel)]="bonusDraft.interestReduction"
-              /></label>
-              <label class="field"
-                ><span>Coste anual</span>
-                <div class="input-suffix">
-                  <input
-                    name="bonusCost"
-                    type="number"
-                    min="0"
-                    step="10"
-                    [(ngModel)]="bonusDraft.annualCost"
-                  /><span>€</span>
-                </div></label
-              >
-              <label class="field"
-                ><span>Desde mes</span
-                ><input name="bonusStart" type="number" min="1" [(ngModel)]="bonusDraft.startMonth"
-              /></label>
-              <label class="field"
-                ><span>Hasta mes</span
-                ><input
-                  name="bonusEnd"
-                  type="number"
-                  min="1"
-                  [(ngModel)]="bonusDraft.endMonth"
-                  placeholder="Fin"
-              /></label>
-              <button class="button button-outline add-button" type="button" (click)="addBonus()">
-                Añadir bono
-              </button>
-            </div>
-
-            <div class="editor-divider"></div>
-            <div class="subsection-heading">
-              <div>
-                <p class="eyebrow">PAGOS EXTRAORDINARIOS</p>
-                <h3>Amortizaciones</h3>
-              </div>
-              <span>{{ draft.amortizations.length }}</span>
-            </div>
-            @if (draft.amortizations.length > 0) {
-              <div class="amortization-list">
-                @for (item of draft.amortizations; track item.id) {
-                  <div class="amortization-row">
-                    <mat-checkbox
-                      [(ngModel)]="item.active"
-                      [name]="'amortization-active-' + item.id"
-                      [attr.aria-label]="'Aplicar ' + item.name"
-                    ></mat-checkbox>
-                    <span
-                      class="amort-icon"
-                      [style.background]="amortizationColor(draft, item.id)"
-                    >↘</span
-                    ><span class="bonus-title"
-                      ><strong>{{ item.name }} · {{ currency(item.amount) }}</strong
-                      ><small
-                        >{{ item.reductionType === 'term' ? 'Reducir plazo' : 'Reducir cuota' }} ·
-                        {{ item.type === 'single' ? 'Puntual' : 'Periódica' }} · mes {{ item.month
-                        }}{{
-                          item.type === 'recurring'
-                            ? ' · cada ' + item.frequencyMonths + ' meses'
-                            : ''
-                        }}</small
-                      >
-                      @let interestSavings = draftAmortizationInterestSavings(item.id);
-                      @if (interestSavings !== null) {
-                        <small>Ahorro de intereses de esta amortización: {{ currency(interestSavings) }}</small>
-                      }
-                    </span
-                    ><button
-                      type="button"
-                      class="icon-button remove-button"
-                      (click)="removeAmortization(item.id)"
-                      aria-label="Eliminar amortización"
-                    >
-                      ×
-                    </button>
-                  </div>
-                }
-              </div>
-            }
-            <div class="inline-form amortization-form">
-              <label class="field"
-                ><span>Nombre (opcional)</span
-                ><input
-                  name="amortName"
-                  [(ngModel)]="amortizationDraft.name"
-                  placeholder="Aportación anual"
-              /></label>
-              <label class="field"
-                ><span>Frecuencia</span
-                ><select name="amortType" [(ngModel)]="amortizationDraft.type">
-                  <option value="single">Puntual</option>
-                  <option value="recurring">Periódica</option>
-                </select></label
-              >
-              <label class="field"
-                ><span>Aplicar a</span
-                ><select name="amortReductionType" [(ngModel)]="amortizationDraft.reductionType">
-                  <option value="term">Reducir plazo</option>
-                  <option value="payment">Reducir cuota</option>
-                </select></label
-              >
-              <label class="field"
-                ><span>Importe</span>
-                <div class="input-suffix">
-                  <input
-                    name="amortAmount"
-                    type="number"
-                    min="1"
-                    step="100"
-                    [(ngModel)]="amortizationDraft.amount"
-                  /><span>€</span>
-                </div></label
-              >
-              <label class="field"
-                ><span>Primer mes</span
-                ><input
-                  name="amortMonth"
-                  type="number"
-                  min="1"
-                  [(ngModel)]="amortizationDraft.month"
-              /></label>
-              @if (amortizationDraft.type === 'recurring') {
-                <label class="field"
-                  ><span>Repetir cada</span>
-                  <div class="input-suffix">
-                    <input
-                      name="amortFrequency"
-                      type="number"
-                      min="1"
-                      [(ngModel)]="amortizationDraft.frequencyMonths"
-                    /><span>meses</span>
-                  </div></label
-                >
-              }
-              <button
-                class="button button-outline add-button"
-                type="button"
-                (click)="addAmortization()"
-              >
-                Añadir amortización
-              </button>
-            </div>
-
-            <div class="editor-footer">
-              <p>
-                El ahorro refleja los datos actuales. Reducir plazo mantiene la cuota; reducir cuota
-                mantiene el plazo. Guarda la oferta para actualizar las comparativas.
-              </p>
-              <button class="button button-primary" type="submit">Guardar oferta</button>
-            </div>
-          </form>
+          <app-mortgage-form
+            [draft]="draft"
+            [editingId]="editingId()"
+            (saveRequested)="saveMortgage()"
+          />
 
           <aside class="offer-list panel">
             <div class="panel-heading">
@@ -532,76 +259,7 @@
         </div>
 
         @if (editingResult(); as detail) {
-          <section class="panel schedule-panel">
-            <div class="panel-heading">
-              <div>
-                <p class="eyebrow">DETALLE DE LA OFERTA</p>
-                <h2>Calendario de amortización · {{ detail.mortgage.name }}</h2>
-              </div>
-              <span class="schedule-caption">{{ detail.result.rows.length }} mensualidades</span>
-            </div>
-            <div class="detail-kpis">
-              <div>
-                <small>Cuota inicial</small
-                ><strong>{{ currency(detail.result.firstPayment) }}</strong>
-              </div>
-              <div>
-                <small>Intereses totales</small
-                ><strong>{{ currency(detail.result.totalInterest) }}</strong>
-              </div>
-              <div>
-                <small>Coste total</small><strong>{{ currency(detail.result.totalCost) }}</strong>
-              </div>
-              <div>
-                <small>Ahorro por amortizar</small
-                ><strong class="positive-value">{{
-                  currency(detail.result.amortizationSavings)
-                }}</strong>
-              </div>
-            </div>
-            <div class="detail-chart-frame">
-              <canvas
-                #detailChart
-                aria-label="Evolución del capital pendiente, intereses acumulados y capital amortizado"
-              ></canvas>
-            </div>
-            <div class="table-scroll schedule-table-wrap">
-              <table class="data-table">
-                <thead>
-                  <tr>
-                    <th>Mes</th>
-                    <th>Cuota</th>
-                    <th>Interés</th>
-                    <th>Capital</th>
-                    <th>Extra</th>
-                    <th>Capital pendiente</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  @for (row of detail.result.rows; track row.month) {
-                    <tr>
-                      <td>{{ row.month }}</td>
-                      <td>{{ currency(row.payment) }}</td>
-                      <td>{{ currency(row.interest) }}</td>
-                      <td>{{ currency(row.principal) }}</td>
-                      <td class="extra-payment-cell">
-                        {{ row.extraPayment ? currency(row.extraPayment) : '—' }}
-                        @for (event of row.amortizationEvents; track event.id) {
-                          <span
-                            class="amortization-dot"
-                            [style.background]="amortizationColor(detail.mortgage, event.id)"
-                            [title]="event.name + ' · mes ' + row.month + ': ' + currency(event.amount)"
-                            [attr.aria-label]="event.name + ' en mes ' + row.month + ': ' + currency(event.amount)"
-                          ></span>
-                        }
-                      </td>
-                      <td>{{ currency(row.remainingCapital) }}</td>
-                    </tr>
-                  }
-                </tbody>
-              </table>
-            </div>
-          </section>
+          <app-amortization-schedule [detail]="detail" />
         }
       </section>
 
@@ -704,12 +362,12 @@
                 <h2>Desglose por oferta</h2>
               </div>
             </div>
-            <div class="chart-frame">
+            <app-chart-viewport class="chart-frame" label="Costes, intereses y bonificaciones">
               <canvas
                 #costChart
                 aria-label="Gráfico de costes, intereses y bonificaciones"
               ></canvas>
-            </div>
+            </app-chart-viewport>
           </section>
           <section class="panel chart-panel">
             <div class="panel-heading">
@@ -718,12 +376,12 @@
                 <h2>Capital pendiente</h2>
               </div>
             </div>
-            <div class="chart-frame">
+            <app-chart-viewport class="chart-frame" label="Capital pendiente por oferta">
               <canvas
                 #comparisonChart
                 aria-label="Gráfico comparativo de capital pendiente"
               ></canvas>
-            </div>
+            </app-chart-viewport>
           </section>
         </div>
 

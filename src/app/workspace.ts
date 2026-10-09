@@ -9,7 +9,6 @@ import {
   signal,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { FormsModule } from '@angular/forms';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { NavigationEnd, Router, RouterLink } from '@angular/router';
 import type { Chart as ChartInstance } from 'chart.js';
@@ -34,6 +33,9 @@ import {
   calculateMortgage,
   createId,
 } from './mortgage-calculator';
+import { MortgageFormComponent } from './mortgage-form';
+import { AmortizationScheduleComponent } from './amortization-schedule';
+import { ChartViewportComponent } from './chart-viewport';
 
 const STORAGE_KEY = 'hipoteca-comparador-v1';
 const currencyFormatter = new Intl.NumberFormat('es-ES', {
@@ -87,6 +89,7 @@ function parseMortgage(value: unknown): Mortgage | null {
     typeof years !== 'number' ||
     !Number.isFinite(years) ||
     years <= 0 ||
+    !Number.isInteger(years * 12) ||
     typeof interestRate !== 'number' ||
     !Number.isFinite(interestRate) ||
     interestRate < 0 ||
@@ -198,14 +201,20 @@ function readMortgages(): Mortgage[] {
 
 @Component({
   selector: 'app-workspace',
-  imports: [DecimalPipe, FormsModule, MatCheckboxModule, RouterLink],
+  imports: [
+    DecimalPipe,
+    MatCheckboxModule,
+    RouterLink,
+    AmortizationScheduleComponent,
+    MortgageFormComponent,
+    ChartViewportComponent,
+  ],
   templateUrl: './workspace.html',
 })
 export class Workspace implements AfterViewInit, OnDestroy {
   @ViewChild('overviewChart') private overviewCanvas?: ElementRef<HTMLCanvasElement>;
   @ViewChild('comparisonChart') private comparisonCanvas?: ElementRef<HTMLCanvasElement>;
   @ViewChild('costChart') private costCanvas?: ElementRef<HTMLCanvasElement>;
-  @ViewChild('detailChart') private detailCanvas?: ElementRef<HTMLCanvasElement>;
 
   readonly mortgages = signal(readMortgages());
   readonly activeView = signal<ViewName>('dashboard');
@@ -245,34 +254,10 @@ export class Workspace implements AfterViewInit, OnDestroy {
 
   draft = emptyMortgage();
   editingId = signal<string | null>(null);
-  bonusDraft = {
-    name: '',
-    interestReduction: 0.2,
-    annualCost: 0,
-    startMonth: 1,
-    endMonth: null as number | null,
-  };
-  amortizationDraft: {
-    name: string;
-    type: 'single' | 'recurring';
-    reductionType: 'term' | 'payment';
-    amount: number;
-    month: number;
-    frequencyMonths: number;
-  } = {
-    name: '',
-    type: 'single',
-    reductionType: 'payment',
-    amount: 1000,
-    month: 12,
-    frequencyMonths: 12,
-  };
 
   private overviewChart: ChartInstance<'line'> | null = null;
   private comparisonChart: ChartInstance<'line'> | null = null;
   private costChart: ChartInstance<'bar'> | null = null;
-  private detailChart: ChartInstance<'line'> | null = null;
-  private draftSavingsCache: { snapshot: string; savings: Map<string, number> } | null = null;
 
   constructor(private readonly router: Router) {
     this.activeView.set(this.viewFromUrl());
@@ -292,7 +277,6 @@ export class Workspace implements AfterViewInit, OnDestroy {
     this.overviewChart?.destroy();
     this.comparisonChart?.destroy();
     this.costChart?.destroy();
-    this.detailChart?.destroy();
   }
 
   setView(view: ViewName): void {
@@ -318,7 +302,8 @@ export class Workspace implements AfterViewInit, OnDestroy {
       !this.draft.name.trim() ||
       !this.draft.bank.trim() ||
       this.draft.amount <= 0 ||
-      this.draft.years <= 0
+      this.draft.years <= 0 ||
+      !Number.isInteger(this.draft.years * 12)
     ) {
       this.status.set('Completa nombre, entidad, capital y plazo con valores válidos.');
       return;
@@ -351,66 +336,6 @@ export class Workspace implements AfterViewInit, OnDestroy {
     }
     this.status.set('Oferta eliminada.');
     this.commitChanges();
-  }
-
-  addBonus(): void {
-    if (!this.bonusDraft.name.trim()) return;
-    this.draft.bonuses = [
-      ...this.draft.bonuses,
-      {
-        id: createId(),
-        name: this.bonusDraft.name.trim(),
-        active: true,
-        interestReduction: Math.max(0, this.bonusDraft.interestReduction),
-        annualCost: Math.max(0, this.bonusDraft.annualCost),
-        startMonth: Math.max(1, Math.trunc(this.bonusDraft.startMonth)),
-        ...(this.bonusDraft.endMonth
-          ? { endMonth: Math.max(1, Math.trunc(this.bonusDraft.endMonth)) }
-          : {}),
-      },
-    ];
-    this.bonusDraft = {
-      name: '',
-      interestReduction: 0.2,
-      annualCost: 0,
-      startMonth: 1,
-      endMonth: null,
-    };
-  }
-
-  removeBonus(id: string): void {
-    this.draft.bonuses = this.draft.bonuses.filter((bonus) => bonus.id !== id);
-  }
-
-  addAmortization(): void {
-    if (
-      this.amortizationDraft.amount <= 0 ||
-      this.amortizationDraft.month < 1 ||
-      (this.amortizationDraft.type === 'recurring' && this.amortizationDraft.frequencyMonths < 1)
-    )
-      return;
-    this.draft.amortizations = [
-      ...this.draft.amortizations,
-      {
-        id: createId(),
-        name:
-          this.amortizationDraft.name.trim() ||
-          `Amortización ${this.draft.amortizations.length + 1}`,
-        active: true,
-        type: this.amortizationDraft.type,
-        reductionType: this.amortizationDraft.reductionType,
-        amount: this.amortizationDraft.amount,
-        month: Math.max(1, Math.trunc(this.amortizationDraft.month)),
-        ...(this.amortizationDraft.type === 'recurring'
-          ? { frequencyMonths: Math.max(1, Math.trunc(this.amortizationDraft.frequencyMonths)) }
-          : {}),
-      },
-    ];
-    this.amortizationDraft.name = '';
-  }
-
-  removeAmortization(id: string): void {
-    this.draft.amortizations = this.draft.amortizations.filter((item) => item.id !== id);
   }
 
   toggleComparison(id: string, checked: boolean): void {
@@ -448,23 +373,6 @@ export class Workspace implements AfterViewInit, OnDestroy {
   amortizationColor(mortgage: Mortgage, id: string): string {
     const index = mortgage.amortizations.findIndex((item) => item.id === id);
     return amortizationColors[(index < 0 ? 0 : index) % amortizationColors.length];
-  }
-
-  draftAmortizationInterestSavings(id: string): number | null {
-    const snapshot = JSON.stringify(this.draft);
-    if (this.draftSavingsCache?.snapshot !== snapshot) {
-      const result = calculateMortgage(this.draft);
-      this.draftSavingsCache = {
-        snapshot,
-        savings: new Map(
-          result.amortizationInterestSavings.map(({ id: amortizationId, savings }) => [
-            amortizationId,
-            savings,
-          ]),
-        ),
-      };
-    }
-    return this.draftSavingsCache.savings.get(id) ?? null;
   }
 
   rateTypeLabel(type: Mortgage['rateType']): string {
@@ -609,77 +517,6 @@ export class Workspace implements AfterViewInit, OnDestroy {
             x: { grid: { display: false } },
             y: {
               beginAtZero: true,
-              ticks: {
-                callback: (value) =>
-                  new Intl.NumberFormat('es-ES', { notation: 'compact' }).format(Number(value)),
-              },
-            },
-          },
-        },
-      });
-    }
-    const detail = this.editingResult();
-    this.detailChart?.destroy();
-    this.detailChart = null;
-    if (this.detailCanvas && detail) {
-      this.detailChart = new Chart(this.detailCanvas.nativeElement, {
-        type: 'line',
-        data: {
-          labels: detail.result.rows.map((row) => row.month),
-          datasets: [
-            {
-              label: 'Capital pendiente',
-              data: detail.result.rows.map((row) => row.remainingCapital),
-              borderColor: chartColors[0],
-              backgroundColor: chartColors[0],
-              yAxisID: 'capital',
-              borderWidth: 2,
-              pointRadius: 0,
-              tension: 0.2,
-            },
-            {
-              label: 'Intereses acumulados',
-              data: detail.result.rows.map((row) => row.cumulativeInterest),
-              borderColor: chartColors[1],
-              backgroundColor: chartColors[1],
-              yAxisID: 'accumulated',
-              borderWidth: 2,
-              pointRadius: 0,
-              tension: 0.2,
-            },
-            {
-              label: 'Capital amortizado',
-              data: detail.result.rows.map((row) => row.cumulativePrincipal),
-              borderColor: chartColors[2],
-              backgroundColor: chartColors[2],
-              yAxisID: 'accumulated',
-              borderWidth: 2,
-              pointRadius: 0,
-              tension: 0.2,
-            },
-          ],
-        },
-        options: {
-          responsive: true,
-          maintainAspectRatio: false,
-          interaction: { mode: 'index', intersect: false },
-          plugins: { legend: { position: 'bottom', labels: { usePointStyle: true, boxWidth: 7 } } },
-          scales: {
-            x: { grid: { display: false }, title: { display: true, text: 'Mes' } },
-            capital: {
-              type: 'linear',
-              position: 'left',
-              beginAtZero: true,
-              ticks: {
-                callback: (value) =>
-                  new Intl.NumberFormat('es-ES', { notation: 'compact' }).format(Number(value)),
-              },
-            },
-            accumulated: {
-              type: 'linear',
-              position: 'right',
-              beginAtZero: true,
-              grid: { drawOnChartArea: false },
               ticks: {
                 callback: (value) =>
                   new Intl.NumberFormat('es-ES', { notation: 'compact' }).format(Number(value)),

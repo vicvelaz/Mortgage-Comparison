@@ -1,0 +1,66 @@
+<section class="panel schedule-panel">
+  <div class="panel-heading">
+    <div>
+      <p class="eyebrow">DETALLE DE LA OFERTA</p>
+      <h2>Calendario de amortización · {{ detail.mortgage.name }}</h2>
+    </div>
+    <span class="schedule-caption">{{ detail.result.rows.length }} mensualidades</span>
+  </div>
+  <div class="detail-kpis">
+    <div>
+      <small>Cuota inicial</small><strong>{{ currency(detail.result.firstPayment) }}</strong>
+    </div>
+    <div>
+      <small>Intereses totales</small><strong>{{ currency(detail.result.totalInterest) }}</strong>
+    </div>
+    <div>
+      <small>Coste total</small><strong>{{ currency(detail.result.totalCost) }}</strong>
+    </div>
+    <div>
+      <small>Ahorro por amortizar</small
+      ><strong class="positive-value">{{ currency(detail.result.amortizationSavings) }}</strong>
+    </div>
+  </div>
+  <app-chart-viewport class="detail-chart-frame" label="Capital e intereses del calendario de amortización">
+    <canvas
+      #detailChart
+      aria-label="Evolución del capital pendiente, intereses acumulados y capital amortizado"
+    ></canvas>
+  </app-chart-viewport>
+  <div class="table-scroll schedule-table-wrap">
+    <table class="data-table">
+      <thead>
+        <tr>
+          <th>Mes</th>
+          <th>Cuota</th>
+          <th>Interés</th>
+          <th>Capital</th>
+          <th>Extra</th>
+          <th>Capital pendiente</th>
+        </tr>
+      </thead>
+      <tbody>
+        @for (row of detail.result.rows; track row.month) {
+          <tr>
+            <td>{{ row.month }}</td>
+            <td>{{ currency(row.payment) }}</td>
+            <td>{{ currency(row.interest) }}</td>
+            <td>{{ currency(row.principal) }}</td>
+            <td class="extra-payment-cell">
+              {{ row.extraPayment ? currency(row.extraPayment) : '—' }}
+              @for (event of row.amortizationEvents; track event.id) {
+                <span
+                  class="amortization-dot"
+                  [style.background]="amortizationColor(detail.mortgage, event.id)"
+                  [title]="event.name + ' · mes ' + row.month + ': ' + currency(event.amount)"
+                  [attr.aria-label]="event.name + ' en mes ' + row.month + ': ' + currency(event.amount)"
+                ></span>
+              }
+            </td>
+            <td>{{ currency(row.remainingCapital) }}</td>
+          </tr>
+        }
+      </tbody>
+    </table>
+  </div>
+</section>

@@ -62,13 +62,11 @@ export interface MortgageResult {
   amortizationInterestSavings: { id: string; savings: number }[];
 }
 
-const cents = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
-
 function monthlyPayment(capital: number, monthlyRate: number, months: number): number {
   if (capital <= 0 || months <= 0) return 0;
   if (monthlyRate === 0) return capital / months;
-  const factor = Math.pow(1 + monthlyRate, months);
-  return (capital * monthlyRate * factor) / (factor - 1);
+  const denominator = -Math.expm1(-months * Math.log1p(monthlyRate));
+  return (capital * monthlyRate) / denominator;
 }
 
 function bonusForMonth(mortgage: Mortgage, month: number) {
@@ -107,7 +105,10 @@ function calculateSchedule(
   mortgage: Mortgage,
   includeAmortizations: boolean,
 ): Omit<MortgageResult, 'amortizationSavings' | 'amortizationInterestSavings'> {
-  const plannedMonths = Math.max(1, Math.round(mortgage.years * 12));
+  const plannedMonths = mortgage.years * 12;
+  if (!Number.isInteger(plannedMonths) || plannedMonths < 1) {
+    throw new RangeError('Mortgage term must contain a whole number of months');
+  }
   let remaining = Math.max(0, mortgage.amount);
   let totalInterest = 0;
   let bonusCost = 0;
@@ -130,19 +131,25 @@ function calculateSchedule(
     const scheduledPrincipal = Math.min(remaining, scheduledPayment - interest);
     remaining -= scheduledPrincipal;
     const amortizationEvents: AmortizationEvent[] = [];
+    const monthAmortizations = amortizationsForMonth(mortgage, month, includeAmortizations);
+    let reducesTerm = false;
+    let reducesPayment = false;
     let extraPayment = 0;
-    for (const item of amortizationsForMonth(mortgage, month, includeAmortizations)) {
+    for (const item of monthAmortizations) {
       const amount = Math.min(remaining, Math.max(0, item.amount));
       if (amount <= 0) continue;
       remaining -= amount;
       extraPayment += amount;
+      reducesTerm ||= item.reductionType === 'term';
+      reducesPayment ||= item.reductionType === 'payment';
       amortizationEvents.push({
         id: item.id,
         name: item.name,
-        amount: cents(amount),
+        amount,
       });
-      fixedPayment = item.reductionType === 'term' ? scheduledPayment : null;
     }
+    if (reducesTerm) fixedPayment = scheduledPayment;
+    else if (reducesPayment) fixedPayment = null;
     const principal = scheduledPrincipal + extraPayment;
     remaining = Math.max(0, remaining);
     totalInterest += interest;
@@ -151,14 +158,14 @@ function calculateSchedule(
 
     rows.push({
       month,
-      payment: cents(interest + scheduledPrincipal),
-      interest: cents(interest),
-      principal: cents(principal),
-      extraPayment: cents(extraPayment),
+      payment: interest + scheduledPrincipal,
+      interest,
+      principal,
+      extraPayment,
       amortizationEvents,
-      remainingCapital: cents(remaining),
-      cumulativeInterest: cents(totalInterest),
-      cumulativePrincipal: cents(cumulativePrincipal),
+      remainingCapital: remaining,
+      cumulativeInterest: totalInterest,
+      cumulativePrincipal,
     });
   }
 
@@ -166,9 +173,9 @@ function calculateSchedule(
     rows,
     firstPayment: rows[0]?.payment ?? 0,
     totalInterest,
-    bonusCost: cents(bonusCost),
-    totalCost: cents(mortgage.amount - remaining + totalInterest + bonusCost),
-    remainingCapital: cents(remaining),
+    bonusCost,
+    totalCost: mortgage.amount - remaining + totalInterest + bonusCost,
+    remainingCapital: remaining,
   };
 }
 
@@ -189,13 +196,12 @@ export function calculateMortgage(mortgage: Mortgage): MortgageResult {
       );
       return {
         id: item.id,
-        savings: cents(Math.max(0, withoutAmortization.totalInterest - result.totalInterest)),
+        savings: Math.max(0, withoutAmortization.totalInterest - result.totalInterest),
       };
     });
   return {
     ...result,
-    totalInterest: cents(result.totalInterest),
-    amortizationSavings: cents(Math.max(0, withoutAmortizations.totalCost - result.totalCost)),
+    amortizationSavings: Math.max(0, withoutAmortizations.totalCost - result.totalCost),
     amortizationInterestSavings,
   };
 }

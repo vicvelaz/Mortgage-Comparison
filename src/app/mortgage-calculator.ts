@@ -114,6 +114,7 @@ function calculateSchedule(
   let bonusCost = 0;
   let cumulativePrincipal = 0;
   let fixedPayment: number | null = null;
+  let previousMonthlyRate: number | null = null;
   const rows: AmortizationRow[] = [];
 
   for (let month = 1; month <= plannedMonths && remaining > 0; month += 1) {
@@ -122,9 +123,11 @@ function calculateSchedule(
     const monthlyRate = annualRate / 100 / 12;
     const interest = remaining * monthlyRate;
     const monthsLeft = plannedMonths - month + 1;
+    const rateChanged = previousMonthlyRate !== null && monthlyRate !== previousMonthlyRate;
+    const repriceVariableRate = mortgage.rateType === 'variable' && rateChanged;
     const scheduledPayment = Math.min(
       remaining + interest,
-      fixedPayment === null
+      fixedPayment === null || repriceVariableRate
         ? monthlyPayment(remaining, monthlyRate, monthsLeft)
         : Math.max(fixedPayment, interest + Math.min(remaining, 0.01)),
     );
@@ -151,6 +154,8 @@ function calculateSchedule(
       }
     }
     if (monthAmortizations.length > 0) fixedPayment = nextPayment;
+    else if (repriceVariableRate) fixedPayment = scheduledPayment;
+    previousMonthlyRate = monthlyRate;
     const principal = scheduledPrincipal + extraPayment;
     remaining = Math.max(0, remaining);
     totalInterest += interest;

@@ -101,6 +101,35 @@ describe('App', () => {
     expect(result.amortizationInterestSavings[0].savings).toBeGreaterThan(0);
   });
 
+  it('reprices a variable-rate payment after a payment-reduction amortization without extending maturity', () => {
+    const mortgage = createMortgage({
+      amount: 100000,
+      years: 2,
+      interestRate: 3,
+      rateType: 'variable',
+      bonuses: [{
+        id: 'introductory',
+        name: 'Bono temporal',
+        active: true,
+        interestReduction: 1,
+        annualCost: 0,
+        startMonth: 1,
+        endMonth: 1,
+      }],
+      amortizations: [createAmortization({ amount: 1000, month: 1 })],
+    });
+    const result = calculateMortgage(mortgage);
+    const balanceAfterFirstMonth = result.rows[0].remainingCapital;
+    const monthlyRate = 0.03 / 12;
+    const remainingMonths = 23;
+    const expectedPayment = balanceAfterFirstMonth * monthlyRate /
+      (1 - Math.pow(1 + monthlyRate, -remainingMonths));
+
+    expect(result.rows[1].payment).toBeCloseTo(expectedPayment, 9);
+    expect(result.rows).toHaveLength(24);
+    expect(result.remainingCapital).toBeCloseTo(0, 8);
+  });
+
   it('shortens the schedule for term reduction and lowers future installments for payment reduction', () => {
     const termReduction = calculateMortgage(createMortgage({
       amount: 100000,

@@ -167,9 +167,11 @@ app-root { display: block; min-height: 100vh; }
 .remove-button:hover { background: #ffe4dc; }
 .inline-form { display: grid; align-items: end; gap: 8px; }
 .bonus-form { grid-template-columns: 1.45fr .75fr .9fr .7fr .7fr auto; }
-.amortization-form { grid-template-columns: 1fr 1fr .8fr 1fr auto; }
+.amortization-form { grid-template-columns: 1.2fr .8fr 1fr .8fr .7fr .8fr auto; }
 .add-button { min-height: 37px; padding: 0 10px; font-size: 10px; }
-.amort-icon { width: 25px; height: 25px; display: grid; place-items: center; color: var(--teal); background: #e5f2ed; border-radius: 4px; font-size: 15px; }
+.amort-icon { width: 25px; height: 25px; flex: 0 0 auto; display: grid; place-items: center; color: white; border-radius: 4px; font-size: 15px; }
+.amortization-dot { width: 9px; height: 9px; display: inline-block; margin-left: 5px; border: 1px solid rgba(255,255,255,.75); border-radius: 50%; vertical-align: middle; cursor: help; }
+.extra-payment-cell { min-width: 100px; }
 .editor-footer { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-top: 20px; padding-top: 15px; border-top: 1px solid var(--line); }
 .editor-footer p { margin: 0; color: var(--muted); font-size: 10px; }
 .offer-list { padding: 18px 15px; }
@@ -256,7 +258,7 @@ app-root { display: block; min-height: 100vh; }
 .bonus-row, .amortization-row, .picker-item { background: #202c28; border-color: #2c3b36; }
 .remove-button { color: #f0a18e; background: #432b27; }
 .remove-button:hover { background: #57332d; }
-.amort-icon { color: #75d8c0; background: #263f38; }
+.amort-icon { color: white; }
 .offer-card { border-top-color: #2a3935; }
 .offer-active { background: #203a34; }
 .offer-card-metrics { color: #c0cec8; }

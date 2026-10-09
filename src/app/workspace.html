@@ -386,19 +386,31 @@
               <div class="amortization-list">
                 @for (item of draft.amortizations; track item.id) {
                   <div class="amortization-row">
-                    <span class="amort-icon">↘</span
+                    <mat-checkbox
+                      [(ngModel)]="item.active"
+                      [name]="'amortization-active-' + item.id"
+                      [attr.aria-label]="'Aplicar ' + item.name"
+                    ></mat-checkbox>
+                    <span
+                      class="amort-icon"
+                      [style.background]="amortizationColor(draft, item.id)"
+                    >↘</span
                     ><span class="bonus-title"
-                      ><strong
-                        >{{ item.type === 'single' ? 'Puntual' : 'Periódica' }} ·
-                        {{ currency(item.amount) }}</strong
+                      ><strong>{{ item.name }} · {{ currency(item.amount) }}</strong
                       ><small
-                        >Mes {{ item.month
+                        >{{ item.reductionType === 'term' ? 'Reducir plazo' : 'Reducir cuota' }} ·
+                        {{ item.type === 'single' ? 'Puntual' : 'Periódica' }} · mes {{ item.month
                         }}{{
                           item.type === 'recurring'
                             ? ' · cada ' + item.frequencyMonths + ' meses'
                             : ''
                         }}</small
-                      ></span
+                      >
+                      @let interestSavings = draftAmortizationInterestSavings(item.id);
+                      @if (interestSavings !== null) {
+                        <small>Ahorro de intereses de esta amortización: {{ currency(interestSavings) }}</small>
+                      }
+                    </span
                     ><button
                       type="button"
                       class="icon-button remove-button"
@@ -413,10 +425,24 @@
             }
             <div class="inline-form amortization-form">
               <label class="field"
+                ><span>Nombre (opcional)</span
+                ><input
+                  name="amortName"
+                  [(ngModel)]="amortizationDraft.name"
+                  placeholder="Aportación anual"
+              /></label>
+              <label class="field"
                 ><span>Frecuencia</span
                 ><select name="amortType" [(ngModel)]="amortizationDraft.type">
                   <option value="single">Puntual</option>
                   <option value="recurring">Periódica</option>
+                </select></label
+              >
+              <label class="field"
+                ><span>Aplicar a</span
+                ><select name="amortReductionType" [(ngModel)]="amortizationDraft.reductionType">
+                  <option value="term">Reducir plazo</option>
+                  <option value="payment">Reducir cuota</option>
                 </select></label
               >
               <label class="field"
@@ -462,7 +488,10 @@
             </div>
 
             <div class="editor-footer">
-              <p>Cuota recalculada a plazo restante. El tipo variable permanece constante.</p>
+              <p>
+                El ahorro refleja los datos actuales. Reducir plazo mantiene la cuota; reducir cuota
+                mantiene el plazo. Guarda la oferta para actualizar las comparativas.
+              </p>
               <button class="button button-primary" type="submit">Guardar oferta</button>
             </div>
           </form>
@@ -555,7 +584,17 @@
                       <td>{{ currency(row.payment) }}</td>
                       <td>{{ currency(row.interest) }}</td>
                       <td>{{ currency(row.principal) }}</td>
-                      <td>{{ row.extraPayment ? currency(row.extraPayment) : '—' }}</td>
+                      <td class="extra-payment-cell">
+                        {{ row.extraPayment ? currency(row.extraPayment) : '—' }}
+                        @for (event of row.amortizationEvents; track event.id) {
+                          <span
+                            class="amortization-dot"
+                            [style.background]="amortizationColor(detail.mortgage, event.id)"
+                            [title]="event.name + ' · mes ' + row.month + ': ' + currency(event.amount)"
+                            [attr.aria-label]="event.name + ' en mes ' + row.month + ': ' + currency(event.amount)"
+                          ></span>
+                        }
+                      </td>
                       <td>{{ currency(row.remainingCapital) }}</td>
                     </tr>
                   }

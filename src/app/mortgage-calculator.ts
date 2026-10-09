@@ -10,10 +10,19 @@ export interface Bonus {
 
 export interface Amortization {
   id: string;
+  name: string;
+  active: boolean;
   type: 'single' | 'recurring';
+  reductionType: 'term' | 'payment';
   amount: number;
   month: number;
   frequencyMonths?: number;
+}
+
+export interface AmortizationEvent {
+  id: string;
+  name: string;
+  amount: number;
 }
 
 export interface Mortgage {
@@ -36,6 +45,7 @@ export interface AmortizationRow {
   interest: number;
   principal: number;
   extraPayment: number;
+  amortizationEvents: AmortizationEvent[];
   remainingCapital: number;
   cumulativeInterest: number;
   cumulativePrincipal: number;
@@ -49,15 +59,16 @@ export interface MortgageResult {
   totalCost: number;
   remainingCapital: number;
   amortizationSavings: number;
+  amortizationInterestSavings: { id: string; savings: number }[];
 }
 
 const cents = (value: number) => Math.round((value + Number.EPSILON) * 100) / 100;
 
 function monthlyPayment(capital: number, monthlyRate: number, months: number): number {
   if (capital <= 0 || months <= 0) return 0;
-  if (monthlyRate === 0) return cents(capital / months);
+  if (monthlyRate === 0) return capital / months;
   const factor = Math.pow(1 + monthlyRate, months);
-  return cents((capital * monthlyRate * factor) / (factor - 1));
+  return (capital * monthlyRate * factor) / (factor - 1);
 }
 
 function bonusForMonth(mortgage: Mortgage, month: number) {
@@ -73,77 +84,119 @@ function bonusForMonth(mortgage: Mortgage, month: number) {
   );
 }
 
-function extraPaymentForMonth(mortgage: Mortgage, month: number, enabled: boolean): number {
-  if (!enabled) return 0;
-  return cents(
-    mortgage.amortizations.reduce((total, item) => {
-      const applies =
-        item.type === 'single'
-          ? month === item.month
-          : month >= item.month &&
-            item.frequencyMonths !== undefined &&
-            item.frequencyMonths > 0 &&
-            (month - item.month) % item.frequencyMonths === 0;
-      return total + (applies ? Math.max(0, item.amount) : 0);
-    }, 0),
-  );
+function amortizationsForMonth(
+  mortgage: Mortgage,
+  month: number,
+  enabled: boolean,
+): Amortization[] {
+  if (!enabled) return [];
+  return mortgage.amortizations.filter((item) => {
+    if (!item.active) return false;
+    const applies =
+      item.type === 'single'
+        ? month === item.month
+        : month >= item.month &&
+          item.frequencyMonths !== undefined &&
+          item.frequencyMonths > 0 &&
+          (month - item.month) % item.frequencyMonths === 0;
+    return applies;
+  });
 }
 
-function calculateSchedule(mortgage: Mortgage, includeAmortizations: boolean): Omit<MortgageResult, 'amortizationSavings'> {
+function calculateSchedule(
+  mortgage: Mortgage,
+  includeAmortizations: boolean,
+): Omit<MortgageResult, 'amortizationSavings' | 'amortizationInterestSavings'> {
   const plannedMonths = Math.max(1, Math.round(mortgage.years * 12));
-  let remaining = cents(Math.max(0, mortgage.amount));
+  let remaining = Math.max(0, mortgage.amount);
   let totalInterest = 0;
   let bonusCost = 0;
   let cumulativePrincipal = 0;
+  let fixedPayment: number | null = null;
   const rows: AmortizationRow[] = [];
 
   for (let month = 1; month <= plannedMonths && remaining > 0; month += 1) {
     const { reduction, cost } = bonusForMonth(mortgage, month);
     const annualRate = Math.max(0, mortgage.interestRate - reduction);
     const monthlyRate = annualRate / 100 / 12;
-    const interest = cents(remaining * monthlyRate);
+    const interest = remaining * monthlyRate;
     const monthsLeft = plannedMonths - month + 1;
-    const scheduledPayment = Math.min(remaining + interest, monthlyPayment(remaining, monthlyRate, monthsLeft));
-    const scheduledPrincipal = Math.min(remaining, cents(scheduledPayment - interest));
-    const extraPayment = Math.min(
-      cents(remaining - scheduledPrincipal),
-      extraPaymentForMonth(mortgage, month, includeAmortizations),
+    const scheduledPayment = Math.min(
+      remaining + interest,
+      fixedPayment === null
+        ? monthlyPayment(remaining, monthlyRate, monthsLeft)
+        : Math.max(fixedPayment, interest + Math.min(remaining, 0.01)),
     );
-    const principal = cents(scheduledPrincipal + extraPayment);
-    remaining = Math.max(0, cents(remaining - principal));
-    totalInterest = cents(totalInterest + interest);
+    const scheduledPrincipal = Math.min(remaining, scheduledPayment - interest);
+    remaining -= scheduledPrincipal;
+    const amortizationEvents: AmortizationEvent[] = [];
+    let extraPayment = 0;
+    for (const item of amortizationsForMonth(mortgage, month, includeAmortizations)) {
+      const amount = Math.min(remaining, Math.max(0, item.amount));
+      if (amount <= 0) continue;
+      remaining -= amount;
+      extraPayment += amount;
+      amortizationEvents.push({
+        id: item.id,
+        name: item.name,
+        amount: cents(amount),
+      });
+      fixedPayment = item.reductionType === 'term' ? scheduledPayment : null;
+    }
+    const principal = scheduledPrincipal + extraPayment;
+    remaining = Math.max(0, remaining);
+    totalInterest += interest;
     bonusCost += cost;
-    cumulativePrincipal = cents(cumulativePrincipal + principal);
+    cumulativePrincipal += principal;
 
     rows.push({
       month,
       payment: cents(interest + scheduledPrincipal),
-      interest,
-      principal,
-      extraPayment,
-      remainingCapital: remaining,
-      cumulativeInterest: totalInterest,
-      cumulativePrincipal,
+      interest: cents(interest),
+      principal: cents(principal),
+      extraPayment: cents(extraPayment),
+      amortizationEvents,
+      remainingCapital: cents(remaining),
+      cumulativeInterest: cents(totalInterest),
+      cumulativePrincipal: cents(cumulativePrincipal),
     });
   }
 
-  const totalPayments = cents(mortgage.amount - remaining + totalInterest);
   return {
     rows,
     firstPayment: rows[0]?.payment ?? 0,
     totalInterest,
     bonusCost: cents(bonusCost),
-    totalCost: cents(totalPayments + bonusCost),
-    remainingCapital: remaining,
+    totalCost: cents(mortgage.amount - remaining + totalInterest + bonusCost),
+    remainingCapital: cents(remaining),
   };
 }
 
 export function calculateMortgage(mortgage: Mortgage): MortgageResult {
   const result = calculateSchedule(mortgage, true);
   const withoutAmortizations = calculateSchedule(mortgage, false);
+  const amortizationInterestSavings = mortgage.amortizations
+    .filter((item) => item.active)
+    .map((item) => {
+      const withoutAmortization = calculateSchedule(
+        {
+          ...mortgage,
+          amortizations: mortgage.amortizations.map((candidate) =>
+            candidate.id === item.id ? { ...candidate, active: false } : candidate,
+          ),
+        },
+        true,
+      );
+      return {
+        id: item.id,
+        savings: cents(Math.max(0, withoutAmortization.totalInterest - result.totalInterest)),
+      };
+    });
   return {
     ...result,
+    totalInterest: cents(result.totalInterest),
     amortizationSavings: cents(Math.max(0, withoutAmortizations.totalCost - result.totalCost)),
+    amortizationInterestSavings,
   };
 }
 

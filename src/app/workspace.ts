@@ -43,6 +43,7 @@ const currencyFormatter = new Intl.NumberFormat('es-ES', {
   maximumFractionDigits: 2,
 });
 const chartColors = ['#007f73', '#df765d', '#586b9c', '#d3a347'];
+const amortizationColors = ['#007f73', '#df765d', '#586b9c', '#d3a347', '#9b6db0', '#5a9bb5'];
 Chart.register(
   BarController,
   BarElement,
@@ -124,11 +125,15 @@ function parseMortgage(value: unknown): Mortgage | null {
   }
 
   const parsedAmortizations: Amortization[] = [];
-  for (const item of amortizations) {
+  for (const [index, item] of amortizations.entries()) {
+    const reductionType = isRecord(item) ? item['reductionType'] : undefined;
     if (
       !isRecord(item) ||
       typeof item['id'] !== 'string' ||
       (item['type'] !== 'single' && item['type'] !== 'recurring') ||
+      (item['active'] !== undefined && typeof item['active'] !== 'boolean') ||
+      (reductionType !== undefined && reductionType !== 'term' && reductionType !== 'payment') ||
+      (item['name'] !== undefined && typeof item['name'] !== 'string') ||
       typeof item['amount'] !== 'number' ||
       !Number.isFinite(item['amount']) ||
       item['amount'] <= 0 ||
@@ -141,7 +146,21 @@ function parseMortgage(value: unknown): Mortgage | null {
           item['frequencyMonths'] < 1))
     )
       return null;
-    parsedAmortizations.push(item as unknown as Amortization);
+    parsedAmortizations.push({
+      id: item['id'],
+      name:
+        typeof item['name'] === 'string' && item['name'].trim()
+          ? item['name'].trim()
+          : `Amortización ${index + 1}`,
+      active: typeof item['active'] === 'boolean' ? item['active'] : true,
+      type: item['type'],
+      reductionType: reductionType === 'term' ? 'term' : 'payment',
+      amount: item['amount'],
+      month: item['month'],
+      ...(typeof item['frequencyMonths'] === 'number'
+        ? { frequencyMonths: item['frequencyMonths'] }
+        : {}),
+    });
   }
 
   return {
@@ -234,12 +253,16 @@ export class Workspace implements AfterViewInit, OnDestroy {
     endMonth: null as number | null,
   };
   amortizationDraft: {
+    name: string;
     type: 'single' | 'recurring';
+    reductionType: 'term' | 'payment';
     amount: number;
     month: number;
     frequencyMonths: number;
   } = {
+    name: '',
     type: 'single',
+    reductionType: 'payment',
     amount: 1000,
     month: 12,
     frequencyMonths: 12,
@@ -249,6 +272,7 @@ export class Workspace implements AfterViewInit, OnDestroy {
   private comparisonChart: ChartInstance<'line'> | null = null;
   private costChart: ChartInstance<'bar'> | null = null;
   private detailChart: ChartInstance<'line'> | null = null;
+  private draftSavingsCache: { snapshot: string; savings: Map<string, number> } | null = null;
 
   constructor(private readonly router: Router) {
     this.activeView.set(this.viewFromUrl());
@@ -369,7 +393,12 @@ export class Workspace implements AfterViewInit, OnDestroy {
       ...this.draft.amortizations,
       {
         id: createId(),
+        name:
+          this.amortizationDraft.name.trim() ||
+          `Amortización ${this.draft.amortizations.length + 1}`,
+        active: true,
         type: this.amortizationDraft.type,
+        reductionType: this.amortizationDraft.reductionType,
         amount: this.amortizationDraft.amount,
         month: Math.max(1, Math.trunc(this.amortizationDraft.month)),
         ...(this.amortizationDraft.type === 'recurring'
@@ -377,6 +406,7 @@ export class Workspace implements AfterViewInit, OnDestroy {
           : {}),
       },
     ];
+    this.amortizationDraft.name = '';
   }
 
   removeAmortization(id: string): void {
@@ -413,6 +443,28 @@ export class Workspace implements AfterViewInit, OnDestroy {
     const selectedIndex = this.selectedIds().indexOf(id);
     const mortgageIndex = this.mortgages().findIndex((mortgage) => mortgage.id === id);
     return chartColors[(selectedIndex >= 0 ? selectedIndex : mortgageIndex) % chartColors.length];
+  }
+
+  amortizationColor(mortgage: Mortgage, id: string): string {
+    const index = mortgage.amortizations.findIndex((item) => item.id === id);
+    return amortizationColors[(index < 0 ? 0 : index) % amortizationColors.length];
+  }
+
+  draftAmortizationInterestSavings(id: string): number | null {
+    const snapshot = JSON.stringify(this.draft);
+    if (this.draftSavingsCache?.snapshot !== snapshot) {
+      const result = calculateMortgage(this.draft);
+      this.draftSavingsCache = {
+        snapshot,
+        savings: new Map(
+          result.amortizationInterestSavings.map(({ id: amortizationId, savings }) => [
+            amortizationId,
+            savings,
+          ]),
+        ),
+      };
+    }
+    return this.draftSavingsCache.savings.get(id) ?? null;
   }
 
   rateTypeLabel(type: Mortgage['rateType']): string {

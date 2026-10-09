@@ -131,25 +131,26 @@ function calculateSchedule(
     const scheduledPrincipal = Math.min(remaining, scheduledPayment - interest);
     remaining -= scheduledPrincipal;
     const amortizationEvents: AmortizationEvent[] = [];
-    const monthAmortizations = amortizationsForMonth(mortgage, month, includeAmortizations);
-    let reducesTerm = false;
-    let reducesPayment = false;
+    const monthAmortizations = amortizationsForMonth(mortgage, month, includeAmortizations).sort(
+      (left, right) => Number(left.reductionType === 'term') - Number(right.reductionType === 'term'),
+    );
+    let nextPayment: number = fixedPayment ?? scheduledPayment;
     let extraPayment = 0;
     for (const item of monthAmortizations) {
       const amount = Math.min(remaining, Math.max(0, item.amount));
       if (amount <= 0) continue;
       remaining -= amount;
       extraPayment += amount;
-      reducesTerm ||= item.reductionType === 'term';
-      reducesPayment ||= item.reductionType === 'payment';
       amortizationEvents.push({
         id: item.id,
         name: item.name,
         amount,
       });
+      if (item.reductionType === 'payment' && monthsLeft > 1 && remaining > 0) {
+        nextPayment = monthlyPayment(remaining, monthlyRate, monthsLeft - 1);
+      }
     }
-    if (reducesTerm) fixedPayment = scheduledPayment;
-    else if (reducesPayment) fixedPayment = null;
+    if (monthAmortizations.length > 0) fixedPayment = nextPayment;
     const principal = scheduledPrincipal + extraPayment;
     remaining = Math.max(0, remaining);
     totalInterest += interest;
@@ -182,26 +183,43 @@ function calculateSchedule(
 export function calculateMortgage(mortgage: Mortgage): MortgageResult {
   const result = calculateSchedule(mortgage, true);
   const withoutAmortizations = calculateSchedule(mortgage, false);
-  const amortizationInterestSavings = mortgage.amortizations
-    .filter((item) => item.active)
-    .map((item) => {
-      const withoutAmortization = calculateSchedule(
-        {
-          ...mortgage,
-          amortizations: mortgage.amortizations.map((candidate) =>
-            candidate.id === item.id ? { ...candidate, active: false } : candidate,
-          ),
-        },
-        true,
-      );
-      return {
-        id: item.id,
-        savings: Math.max(0, withoutAmortization.totalInterest - result.totalInterest),
-      };
-    });
+  const activeAmortizations = mortgage.amortizations.filter((item) => item.active);
+  const orderedAmortizations = activeAmortizations
+    .map((item, index) => ({ item, index }))
+    .sort((left, right) =>
+      left.item.month - right.item.month ||
+      Number(left.item.reductionType === 'term') - Number(right.item.reductionType === 'term') ||
+      left.index - right.index,
+    );
+  const savingsById = new Map<string, number>();
+  let previousInterest = withoutAmortizations.totalInterest;
+  let remainingSavings = Math.round(Math.max(0, previousInterest - result.totalInterest) * 100) / 100;
+  const includedIds = new Set<string>();
+  for (const { item } of orderedAmortizations) {
+    includedIds.add(item.id);
+    const scenario = calculateSchedule(
+      {
+        ...mortgage,
+        amortizations: mortgage.amortizations.map((candidate) => ({
+          ...candidate,
+          active: candidate.active && includedIds.has(candidate.id),
+        })),
+      },
+      true,
+    );
+    const marginalSavings = Math.round(Math.max(0, previousInterest - scenario.totalInterest) * 100) / 100;
+    const savings = Math.min(remainingSavings, marginalSavings);
+    savingsById.set(item.id, savings);
+    remainingSavings -= savings;
+    previousInterest = scenario.totalInterest;
+  }
+  const amortizationInterestSavings = activeAmortizations.map((item) => ({
+    id: item.id,
+    savings: savingsById.get(item.id) ?? 0,
+  }));
   return {
     ...result,
-    amortizationSavings: Math.max(0, withoutAmortizations.totalCost - result.totalCost),
+    amortizationSavings: Math.max(0, withoutAmortizations.totalInterest - result.totalInterest),
     amortizationInterestSavings,
   };
 }

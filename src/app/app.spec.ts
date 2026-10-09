@@ -50,6 +50,16 @@ describe('App', () => {
     expect(result.totalCost).toBe(10000);
   });
 
+  it('matches the base payment and interest totals at both effective rates', () => {
+    const bonified = calculateMortgage(createMortgage({ amount: 110000, years: 30, interestRate: 2.55 }));
+    const unbonified = calculateMortgage(createMortgage({ amount: 110000, years: 30, interestRate: 3.55 }));
+
+    expect(bonified.firstPayment).toBeCloseTo(437.5, 2);
+    expect(bonified.totalInterest).toBeCloseTo(47499.26, 2);
+    expect(unbonified.firstPayment).toBeCloseTo(497.02, 2);
+    expect(unbonified.totalInterest).toBeCloseTo(68928.79, 2);
+  });
+
   it('keeps the payment formula stable for rates close to zero', () => {
     const result = calculateMortgage(createMortgage({
       amount: 10000,
@@ -159,6 +169,95 @@ describe('App', () => {
     }));
 
     expect(result.amortizationInterestSavings[0].savings).toBeCloseTo(1084.8, 2);
+
+    const unbonifiedResult = calculateMortgage(createMortgage({
+      amount: 110000,
+      years: 30,
+      interestRate: 3.55,
+      amortizations: [createAmortization({ reductionType: 'term', amount: 1000, month: 12 })],
+    }));
+    expect(unbonifiedResult.amortizationInterestSavings[0].savings).toBeCloseTo(1776.33, 2);
+  });
+
+  it('attributes simultaneous payment and term reductions without exceeding total savings', () => {
+    const result = calculateMortgage(createMortgage({
+      amount: 110000,
+      years: 30,
+      interestRate: 3.55,
+      bonuses: [
+        { id: 'bonus-1', name: 'Bono 1', active: true, interestReduction: 0.5, annualCost: 0 },
+        { id: 'bonus-2', name: 'Bono 2', active: true, interestReduction: 0.5, annualCost: 0 },
+      ],
+      amortizations: [
+        createAmortization({ id: 'payment', amount: 1000, month: 12 }),
+        createAmortization({ id: 'term', reductionType: 'term', amount: 1000, month: 12 }),
+      ],
+    }));
+
+    expect(result.rows[12].payment).toBeCloseTo(433.43, 2);
+    expect(result.totalInterest).toBeCloseTo(45998.62, 2);
+    expect(result.amortizationSavings).toBeCloseTo(1500.64, 2);
+    expect(result.amortizationInterestSavings).toEqual([
+      { id: 'payment', savings: expect.closeTo(415.93, 2) },
+      { id: 'term', savings: expect.closeTo(1084.71, 2) },
+    ]);
+    expect(result.amortizationInterestSavings.reduce((sum, item) => sum + item.savings, 0))
+      .toBeCloseTo(result.amortizationSavings, 2);
+  });
+
+  it('reports interest savings separately from bonus costs avoided by early payoff', () => {
+    const mortgage = createMortgage({
+      amount: 110000,
+      years: 30,
+      interestRate: 3.55,
+      bonuses: [
+        { id: 'bonus-1', name: 'Bono 1', active: true, interestReduction: 0.5, annualCost: 120 },
+        { id: 'bonus-2', name: 'Bono 2', active: true, interestReduction: 0.5, annualCost: 120 },
+      ],
+      amortizations: [createAmortization({ reductionType: 'term', amount: 1000, month: 12 })],
+    });
+    const result = calculateMortgage(mortgage);
+    const baseline = calculateMortgage({ ...mortgage, amortizations: [] });
+
+    expect(result.amortizationSavings).toBeCloseTo(
+      baseline.totalInterest - result.totalInterest,
+      2,
+    );
+    expect(result.amortizationSavings).toBeCloseTo(
+      result.amortizationInterestSavings[0].savings,
+      2,
+    );
+  });
+
+  it('matches annual recurring amortization interest and natural payoff at the effective rate', () => {
+    const mortgage = createMortgage({
+      amount: 110000,
+      years: 30,
+      interestRate: 3.55,
+      bonuses: [
+        { id: 'bonus-1', name: 'Bono 1', active: true, interestReduction: 0.5, annualCost: 0 },
+        { id: 'bonus-2', name: 'Bono 2', active: true, interestReduction: 0.5, annualCost: 0 },
+      ],
+    });
+    const termReduction = calculateMortgage({
+      ...mortgage,
+      amortizations: [createAmortization({
+        type: 'recurring', reductionType: 'term', amount: 3000, month: 12, frequencyMonths: 12,
+      })],
+    });
+    const paymentReduction = calculateMortgage({
+      ...mortgage,
+      amortizations: [createAmortization({
+        type: 'recurring', amount: 3000, month: 12, frequencyMonths: 12,
+      })],
+    });
+
+    expect(termReduction.rows).toHaveLength(200);
+    expect(termReduction.totalInterest).toBeCloseTo(25279.6, 2);
+    expect(termReduction.amortizationSavings).toBeCloseTo(22219.66, 2);
+    expect(paymentReduction.rows).toHaveLength(276);
+    expect(paymentReduction.totalInterest).toBeCloseTo(30364.55, 2);
+    expect(paymentReduction.amortizationSavings).toBeCloseTo(17134.71, 2);
   });
 
   it('chains same-month amortizations against the residual balance', () => {
@@ -185,7 +284,7 @@ describe('App', () => {
     expect(combined.totalInterest).toBe(equivalentSinglePayment.totalInterest);
   });
 
-  it('keeps mixed same-month amortizations independent of their insertion order', () => {
+  it('processes same-month payment reduction before term reduction regardless of insertion order', () => {
     const amortizations = [
       createAmortization({ id: 'term', reductionType: 'term', amount: 1000, month: 12 }),
       createAmortization({ id: 'payment', reductionType: 'payment', amount: 500, month: 12 }),
@@ -197,7 +296,7 @@ describe('App', () => {
     }));
 
     expect(forward.totalInterest).toBeCloseTo(reverse.totalInterest, 10);
-    expect(forward.totalInterest).toBeCloseTo(termPriority.totalInterest, 10);
+    expect(forward.rows[12].payment).toBeLessThan(termPriority.rows[12].payment);
   });
 
   it('applies active bonuses only within their configured months', () => {
@@ -233,7 +332,7 @@ describe('App', () => {
     expect(result.bonusCost).toBeCloseTo(20, 10);
     expect(result.amortizationInterestSavings[0].savings).toBeCloseTo(
       withoutAmortization.totalInterest - result.totalInterest,
-      10,
+      2,
     );
   });
 

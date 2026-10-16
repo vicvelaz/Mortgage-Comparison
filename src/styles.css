@@ -219,6 +219,8 @@ app-root { display: block; min-height: 100vh; }
 .table-strong { color: var(--ink) !important; font-weight: 700; }
 .empty-cell { padding: 20px !important; color: var(--muted) !important; text-align: center !important; }
 .method-note { margin: 12px 0 0; color: var(--muted); font-size: 9px; }
+.field-hint, .row-warning { margin: 0; color: #715d37; font-size: 9px; }
+.kpi-note { display: block; margin-top: 4px; color: var(--muted); font-size: 9px; }
 
 .mat-mdc-checkbox { --mdc-checkbox-selected-icon-color: var(--teal); --mdc-checkbox-selected-hover-icon-color: var(--teal-dark); --mdc-checkbox-selected-focus-icon-color: var(--teal-dark); --mdc-checkbox-selected-pressed-icon-color: var(--teal-dark); }
 

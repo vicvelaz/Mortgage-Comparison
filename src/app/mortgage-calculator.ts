@@ -1,3 +1,5 @@
+import { MAX_TERM_YEARS } from './mortgage-validation';
+
 export interface Bonus {
   id: string;
   name: string;
@@ -60,13 +62,16 @@ export interface MortgageResult {
   remainingCapital: number;
   amortizationSavings: number;
   amortizationInterestSavings: { id: string; savings: number }[];
+  rateCapped: boolean;
+  annualPercentageRate: number;
 }
 
 function monthlyPayment(capital: number, monthlyRate: number, months: number): number {
   if (capital <= 0 || months <= 0) return 0;
   if (monthlyRate === 0) return capital / months;
   const denominator = -Math.expm1(-months * Math.log1p(monthlyRate));
-  return (capital * monthlyRate) / denominator;
+  const payment = (capital * monthlyRate) / denominator;
+  return Number.isFinite(payment) ? payment : capital * monthlyRate;
 }
 
 function bonusForMonth(mortgage: Mortgage, month: number) {
@@ -101,10 +106,12 @@ function amortizationsForMonth(
   });
 }
 
-function calculateSchedule(
-  mortgage: Mortgage,
-  includeAmortizations: boolean,
-): Omit<MortgageResult, 'amortizationSavings' | 'amortizationInterestSavings'> {
+type ScheduleResult = Omit<
+  MortgageResult,
+  'amortizationSavings' | 'amortizationInterestSavings' | 'annualPercentageRate'
+> & { cashFlows: number[] };
+
+function calculateSchedule(mortgage: Mortgage, includeAmortizations: boolean): ScheduleResult {
   const plannedMonths = mortgage.years * 12;
   if (!Number.isInteger(plannedMonths) || plannedMonths < 1) {
     throw new RangeError('Mortgage term must contain a whole number of months');
@@ -115,10 +122,13 @@ function calculateSchedule(
   let cumulativePrincipal = 0;
   let fixedPayment: number | null = null;
   let previousMonthlyRate: number | null = null;
+  let rateCapped = false;
+  const cashFlows: number[] = [];
   const rows: AmortizationRow[] = [];
 
   for (let month = 1; month <= plannedMonths && remaining > 0; month += 1) {
     const { reduction, cost } = bonusForMonth(mortgage, month);
+    if (reduction > mortgage.interestRate) rateCapped = true;
     const annualRate = Math.max(0, mortgage.interestRate - reduction);
     const monthlyRate = annualRate / 100 / 12;
     const interest = remaining * monthlyRate;
@@ -161,6 +171,7 @@ function calculateSchedule(
     totalInterest += interest;
     bonusCost += cost;
     cumulativePrincipal += principal;
+    cashFlows.push(interest + scheduledPrincipal + extraPayment + cost);
 
     rows.push({
       month,
@@ -182,12 +193,22 @@ function calculateSchedule(
     bonusCost,
     totalCost: mortgage.amount - remaining + totalInterest + bonusCost,
     remainingCapital: remaining,
+    rateCapped,
+    cashFlows,
   };
 }
 
 export function calculateMortgage(mortgage: Mortgage): MortgageResult {
-  const result = calculateSchedule(mortgage, true);
+  if (!isCalculable(mortgage)) return emptyResult();
+  const { cashFlows, ...result } = calculateSchedule(mortgage, true);
   const withoutAmortizations = calculateSchedule(mortgage, false);
+  if (
+    !isFiniteResult(result) ||
+    !isFiniteResult(withoutAmortizations) ||
+    !cashFlows.every((flow) => Number.isFinite(flow))
+  ) {
+    return emptyResult();
+  }
   const activeAmortizations = mortgage.amortizations.filter((item) => item.active);
   const orderedAmortizations = activeAmortizations
     .map((item, index) => ({ item, index }))
@@ -226,7 +247,81 @@ export function calculateMortgage(mortgage: Mortgage): MortgageResult {
     ...result,
     amortizationSavings: Math.max(0, withoutAmortizations.totalInterest - result.totalInterest),
     amortizationInterestSavings,
+    annualPercentageRate: annualPercentageRate(mortgage.amount, cashFlows),
   };
+}
+
+/**
+ * Coste financiero (intereses más bonificaciones) por cada 100 € prestados.
+ * Permite comparar ofertas con distinto capital.
+ */
+export function relativeCostPer100(
+  mortgage: Pick<Mortgage, 'amount'>,
+  result: Pick<MortgageResult, 'totalInterest' | 'bonusCost'>,
+): number {
+  if (mortgage.amount <= 0) return 0;
+  return ((result.totalInterest + result.bonusCost) / mortgage.amount) * 100;
+}
+
+function isCalculable(mortgage: Mortgage): boolean {
+  return (
+    Number.isFinite(mortgage.amount) &&
+    Number.isFinite(mortgage.interestRate) &&
+    Number.isFinite(mortgage.years) &&
+    mortgage.years >= 1 &&
+    mortgage.years <= MAX_TERM_YEARS &&
+    Number.isInteger(mortgage.years * 12)
+  );
+}
+
+function isFiniteResult(
+  result: Pick<MortgageResult, 'firstPayment' | 'totalInterest' | 'bonusCost' | 'totalCost' | 'remainingCapital'>,
+): boolean {
+  return [result.firstPayment, result.totalInterest, result.bonusCost, result.totalCost, result.remainingCapital].every(
+    (value) => Number.isFinite(value),
+  );
+}
+
+function emptyResult(): MortgageResult {
+  return {
+    rows: [],
+    firstPayment: 0,
+    totalInterest: 0,
+    bonusCost: 0,
+    totalCost: 0,
+    remainingCapital: 0,
+    amortizationSavings: 0,
+    amortizationInterestSavings: [],
+    rateCapped: false,
+    annualPercentageRate: 0,
+  };
+}
+
+/**
+ * TAE aproximada (en %): tipo mensual que iguala el capital recibido con los
+ * flujos mensuales pagados (cuotas, amortizaciones y coste de bonificaciones).
+ */
+function annualPercentageRate(amount: number, cashFlows: number[]): number {
+  if (amount <= 0 || cashFlows.length === 0) return 0;
+  const presentValue = (monthlyRate: number): number => {
+    let total = 0;
+    let discount = 1;
+    for (const flow of cashFlows) {
+      discount /= 1 + monthlyRate;
+      total += flow * discount;
+    }
+    return total;
+  };
+  if (presentValue(0) <= amount) return 0;
+  let low = 0;
+  let high = 1;
+  for (let step = 0; step < 200; step += 1) {
+    const middle = (low + high) / 2;
+    if (presentValue(middle) > amount) low = middle;
+    else high = middle;
+  }
+  const monthlyRate = (low + high) / 2;
+  return ((1 + monthlyRate) ** 12 - 1) * 100;
 }
 
 export function createId(): string {

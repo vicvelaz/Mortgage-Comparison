@@ -77,12 +77,15 @@
           </article>
           <article class="kpi-card">
             <div class="kpi-top">
-              <span>MENOR COSTE TOTAL</span><span class="kpi-index">02</span>
+              <span>MENOR TOTAL PAGADO</span><span class="kpi-index">02</span>
             </div>
             <div class="kpi-value kpi-money">
               {{ cheapest() ? currency(calculateMortgageFor(cheapest()!.id).totalCost) : '—' }}
             </div>
             <p>{{ cheapest()?.name ?? 'Añade una oferta para empezar' }}</p>
+            <small class="kpi-note"
+              >Entre todas tus ofertas. Solo comparable con el mismo capital y plazo.</small
+            >
           </article>
           <article class="kpi-card">
             <div class="kpi-top"><span>CUOTA MÁS BAJA</span><span class="kpi-index">03</span></div>
@@ -221,6 +224,7 @@
             [draft]="draft"
             [editingId]="editingId()"
             (saveRequested)="saveMortgage()"
+            (notify)="status.set($event)"
           />
 
           <aside class="offer-list panel">
@@ -312,9 +316,18 @@
             <p>Selecciona al menos dos hipotecas para ver la comparación.</p>
           </div>
         }
+        @if (!comparable()) {
+          <div class="notice">
+            <span>i</span>
+            <p>
+              Las ofertas tienen capital o plazo distintos: el coste total no es directamente
+              comparable. Fíjate en el coste por cada 100 € prestados.
+            </p>
+          </div>
+        }
         <div class="comparison-kpis">
           <article class="comparison-metric">
-            <span>MENOR COSTE TOTAL</span
+            <span>MENOR TOTAL PAGADO</span
             ><strong>{{
               selectedLowest('totalCost')
                 ? currency(selectedLowest('totalCost')!.result.totalCost)
@@ -349,8 +362,16 @@
             ><small>En ofertas seleccionadas</small>
           </article>
           <article class="comparison-metric">
-            <span>AHORRO POR AMORTIZACIONES</span><strong>{{ currency(totalSavings()) }}</strong
-            ><small>En ofertas seleccionadas</small>
+            <span>AHORRO EN INTERESES (AMORTIZ.)</span
+            ><strong>{{ currency(totalSavings()) }}</strong
+            ><small>Solo intereses; sin bonificaciones</small>
+          </article>
+          <article class="comparison-metric">
+            <span>MEJOR COSTE POR 100 €</span
+            ><strong>{{
+              lowestRelativeCost() ? currency(lowestRelativeCost()!.relativeCost) : '—'
+            }}</strong
+            ><small>{{ lowestRelativeCost()?.mortgage.name ?? 'Selecciona ofertas' }}</small>
           </article>
         </div>
 
@@ -398,12 +419,14 @@
                 <tr>
                   <th>Oferta</th>
                   <th>Tipo</th>
-                  <th>Interés inicial</th>
+                  <th>Tipo nominal</th>
                   <th>Cuota inicial</th>
                   <th>Intereses</th>
                   <th>Bonificaciones</th>
-                  <th>Coste total</th>
-                  <th>Ahorro amortiz.</th>
+                  <th>Total pagado</th>
+                  <th>Ahorro intereses</th>
+                  <th>TAE aprox.</th>
+                  <th>Coste por 100 €</th>
                 </tr>
               </thead>
               <tbody>
@@ -420,10 +443,12 @@
                     <td>{{ currency(item.result.bonusCost) }}</td>
                     <td class="table-strong">{{ currency(item.result.totalCost) }}</td>
                     <td class="positive-value">{{ currency(item.result.amortizationSavings) }}</td>
+                    <td>{{ item.result.annualPercentageRate | number: '1.2-2' }}%</td>
+                    <td>{{ currency(relativeCost(item)) }}</td>
                   </tr>
                 } @empty {
                   <tr>
-                    <td colspan="8" class="empty-cell">
+                    <td colspan="10" class="empty-cell">
                       Selecciona ofertas para mostrar los resultados.
                     </td>
                   </tr>
@@ -434,6 +459,11 @@
           <p class="method-note">
             Cálculo francés mensual. El tipo variable se mantiene constante en la proyección; no se
             modelan revisiones de índice.
+          </p>
+          <p class="method-note">
+            Total pagado = capital devuelto + intereses + bonificaciones. Ahorro en intereses: solo
+            intereses evitados por las amortizaciones. TAE aprox.: orientativa, incluye bonificaciones
+            y no sustituye a la FEE. Coste por 100 € = (intereses + bonificaciones) / capital × 100.
           </p>
         </section>
       </section>

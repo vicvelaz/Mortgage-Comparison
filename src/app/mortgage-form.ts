@@ -2,7 +2,8 @@ import { DecimalPipe } from '@angular/common';
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatCheckboxModule } from '@angular/material/checkbox';
-import { Amortization, Mortgage, calculateMortgage, createId } from './mortgage-calculator';
+import { Mortgage, MortgageResult, calculateMortgage, createId } from './mortgage-calculator';
+import { validateAmortization, validateBonus, validateMortgage } from './mortgage-validation';
 
 const currencyFormatter = new Intl.NumberFormat('es-ES', {
   style: 'currency',
@@ -21,6 +22,7 @@ export class MortgageFormComponent {
   @Input({ required: true }) draft!: Mortgage;
   @Input() editingId: string | null = null;
   @Output() saveRequested = new EventEmitter<void>();
+  @Output() notify = new EventEmitter<string>();
 
   bonusDraft = {
     name: '',
@@ -38,7 +40,7 @@ export class MortgageFormComponent {
     frequencyMonths: 12,
   };
 
-  private draftSavingsCache: { snapshot: string; savings: Map<string, number> } | null = null;
+  private draftCache: { snapshot: string; result: MortgageResult | null } | null = null;
 
   currency(value: number): string {
     return currencyFormatter.format(value);
@@ -53,42 +55,46 @@ export class MortgageFormComponent {
     return amortizationColors[(index < 0 ? 0 : index) % amortizationColors.length];
   }
 
-  draftAmortizationInterestSavings(id: string): number | null {
+  /** Resultado del borrador; null mientras el borrador no es válido. */
+  get draftResult(): MortgageResult | null {
     const snapshot = JSON.stringify(this.draft);
-    if (this.draftSavingsCache?.snapshot !== snapshot) {
-      const result = calculateMortgage(this.draft);
-      this.draftSavingsCache = {
+    if (this.draftCache?.snapshot !== snapshot) {
+      this.draftCache = {
         snapshot,
-        savings: new Map(
-          result.amortizationInterestSavings.map(({ id: amortizationId, savings }) => [
-            amortizationId,
-            savings,
-          ]),
-        ),
+        result: validateMortgage(this.draft) ? null : calculateMortgage(this.draft),
       };
     }
-    return this.draftSavingsCache.savings.get(id) ?? null;
+    return this.draftCache.result;
+  }
+
+  draftAmortizationInterestSavings(id: string): number | null {
+    return this.draftResult?.amortizationInterestSavings.find((item) => item.id === id)?.savings ?? null;
   }
 
   addBonus(): void {
-    if (
-      !this.bonusDraft.name.trim() ||
-      !Number.isInteger(this.bonusDraft.startMonth) ||
-      (this.bonusDraft.endMonth !== null && !Number.isInteger(this.bonusDraft.endMonth))
-    )
+    const bonus = this.bonusDraft;
+    const endMonth = bonus.endMonth ?? undefined;
+    const error = validateBonus({
+      name: bonus.name,
+      interestReduction: bonus.interestReduction,
+      annualCost: bonus.annualCost,
+      startMonth: bonus.startMonth,
+      endMonth,
+    });
+    if (error) {
+      this.notify.emit(error);
       return;
+    }
     this.draft.bonuses = [
       ...this.draft.bonuses,
       {
         id: createId(),
-        name: this.bonusDraft.name.trim(),
+        name: bonus.name.trim(),
         active: true,
-        interestReduction: Math.max(0, this.bonusDraft.interestReduction),
-        annualCost: Math.max(0, this.bonusDraft.annualCost),
-        startMonth: Math.max(1, this.bonusDraft.startMonth),
-        ...(this.bonusDraft.endMonth
-          ? { endMonth: Math.max(1, this.bonusDraft.endMonth) }
-          : {}),
+        interestReduction: bonus.interestReduction,
+        annualCost: bonus.annualCost,
+        startMonth: bonus.startMonth,
+        ...(endMonth !== undefined ? { endMonth } : {}),
       },
     ];
     this.bonusDraft = {
@@ -105,32 +111,30 @@ export class MortgageFormComponent {
   }
 
   addAmortization(): void {
-    if (
-      this.amortizationDraft.amount <= 0 ||
-      !Number.isInteger(this.amortizationDraft.month) ||
-      this.amortizationDraft.month < 1 ||
-      (this.amortizationDraft.type === 'recurring' &&
-        (!Number.isInteger(this.amortizationDraft.frequencyMonths) ||
-          this.amortizationDraft.frequencyMonths < 1))
-    )
+    const item = this.amortizationDraft;
+    const error = validateAmortization(item);
+    if (error) {
+      this.notify.emit(error);
       return;
+    }
     this.draft.amortizations = [
       ...this.draft.amortizations,
       {
         id: createId(),
-        name:
-          this.amortizationDraft.name.trim() ||
-          `Amortización ${this.draft.amortizations.length + 1}`,
+        name: item.name.trim() || `Amortización ${this.draft.amortizations.length + 1}`,
         active: true,
-        type: this.amortizationDraft.type,
-        reductionType: this.amortizationDraft.reductionType,
-        amount: this.amortizationDraft.amount,
-        month: this.amortizationDraft.month,
-        ...(this.amortizationDraft.type === 'recurring'
-          ? { frequencyMonths: this.amortizationDraft.frequencyMonths }
-          : {}),
+        type: item.type,
+        reductionType: item.reductionType,
+        amount: item.amount,
+        month: item.month,
+        ...(item.type === 'recurring' ? { frequencyMonths: item.frequencyMonths } : {}),
       },
     ];
+    if (item.month > this.draft.years * 12) {
+      this.notify.emit(
+        `La amortización cae en el mes ${item.month}, fuera del plazo de la hipoteca; no tendrá efecto.`,
+      );
+    }
     this.amortizationDraft.name = '';
   }
 

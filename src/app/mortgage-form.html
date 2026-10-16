@@ -71,7 +71,19 @@
       ><span>Fecha estimada de inicio</span
       ><input name="startDate" type="date" [(ngModel)]="draft.startDate"
     /></label>
+    @if (draft.rateType === 'variable') {
+      <p class="field-hint field-wide">
+        El cálculo usa el tipo indicado durante todo el plazo; no se simula la revisión del tipo
+        variable.
+      </p>
+    }
   </div>
+  @if (draftResult?.rateCapped) {
+    <div class="notice">
+      <span>i</span>
+      <p>Las bonificaciones superan el tipo de interés; el tipo efectivo se limita a 0 %.</p>
+    </div>
+  }
 
   <div class="editor-divider"></div>
   <div class="subsection-heading">
@@ -180,6 +192,11 @@
             @if (interestSavings !== null) {
               <small>Ahorro de intereses de esta amortización: {{ currency(interestSavings) }}</small>
             }
+            @if (item.month > draft.years * 12) {
+              <small class="row-warning"
+                >Fuera del plazo de la hipoteca: no tendrá efecto.</small
+              >
+            }
           </span>
           <button
             type="button"
@@ -251,8 +268,9 @@
 
   <div class="editor-footer">
     <p>
-      El ahorro refleja los datos actuales. Reducir plazo mantiene la cuota; reducir cuota mantiene
-      el plazo. El ahorro de cada amortización es incremental y mantiene las demás activas. Si
+      El ahorro mostrado es solo en intereses; no incluye bonificaciones. Reducir plazo mantiene la
+      cuota; reducir cuota mantiene el plazo. El ahorro de cada amortización es incremental y
+      mantiene las demás activas. Si
       coinciden ambas estrategias en un mes, prevalece reducir plazo. Guarda la oferta para
       actualizar las comparativas.
     </p>

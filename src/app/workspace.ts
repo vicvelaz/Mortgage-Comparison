@@ -26,18 +26,22 @@ import {
 } from 'chart.js';
 import { filter } from 'rxjs';
 import {
-  Amortization,
-  Bonus,
   Mortgage,
   MortgageResult,
   calculateMortgage,
   createId,
+  relativeCostPer100,
 } from './mortgage-calculator';
 import { MortgageFormComponent } from './mortgage-form';
 import { AmortizationScheduleComponent } from './amortization-schedule';
 import { ChartViewportComponent } from './chart-viewport';
-
-const STORAGE_KEY = 'hipoteca-comparador-v1';
+import {
+  STORAGE_KEY,
+  loadMortgages,
+  parseMortgageFile,
+  serializeMortgages,
+} from './mortgage-storage';
+import { validateMortgage } from './mortgage-validation';
 const currencyFormatter = new Intl.NumberFormat('es-ES', {
   style: 'currency',
   currency: 'EUR',
@@ -76,129 +80,6 @@ function emptyMortgage(): Mortgage {
   };
 }
 
-function parseMortgage(value: unknown): Mortgage | null {
-  if (!isRecord(value)) return null;
-  const { id, name, bank, amount, years, interestRate, bonuses, amortizations } = value;
-  if (
-    typeof id !== 'string' ||
-    typeof name !== 'string' ||
-    typeof bank !== 'string' ||
-    typeof amount !== 'number' ||
-    !Number.isFinite(amount) ||
-    amount <= 0 ||
-    typeof years !== 'number' ||
-    !Number.isFinite(years) ||
-    years <= 0 ||
-    !Number.isInteger(years * 12) ||
-    typeof interestRate !== 'number' ||
-    !Number.isFinite(interestRate) ||
-    interestRate < 0 ||
-    !Array.isArray(bonuses) ||
-    !Array.isArray(amortizations)
-  )
-    return null;
-
-  const parsedBonuses: Bonus[] = [];
-  for (const item of bonuses) {
-    if (
-      !isRecord(item) ||
-      typeof item['id'] !== 'string' ||
-      typeof item['name'] !== 'string' ||
-      typeof item['active'] !== 'boolean' ||
-      typeof item['interestReduction'] !== 'number' ||
-      !Number.isFinite(item['interestReduction']) ||
-      item['interestReduction'] < 0 ||
-      typeof item['annualCost'] !== 'number' ||
-      !Number.isFinite(item['annualCost']) ||
-      item['annualCost'] < 0 ||
-      (item['startMonth'] !== undefined &&
-        (typeof item['startMonth'] !== 'number' ||
-          !Number.isInteger(item['startMonth']) ||
-          item['startMonth'] < 1)) ||
-      (item['endMonth'] !== undefined &&
-        (typeof item['endMonth'] !== 'number' ||
-          !Number.isInteger(item['endMonth']) ||
-          item['endMonth'] < 1)) ||
-      (typeof item['startMonth'] === 'number' &&
-        typeof item['endMonth'] === 'number' &&
-        item['endMonth'] < item['startMonth'])
-    )
-      return null;
-    parsedBonuses.push(item as unknown as Bonus);
-  }
-
-  const parsedAmortizations: Amortization[] = [];
-  for (const [index, item] of amortizations.entries()) {
-    const reductionType = isRecord(item) ? item['reductionType'] : undefined;
-    if (
-      !isRecord(item) ||
-      typeof item['id'] !== 'string' ||
-      (item['type'] !== 'single' && item['type'] !== 'recurring') ||
-      (item['active'] !== undefined && typeof item['active'] !== 'boolean') ||
-      (reductionType !== undefined && reductionType !== 'term' && reductionType !== 'payment') ||
-      (item['name'] !== undefined && typeof item['name'] !== 'string') ||
-      typeof item['amount'] !== 'number' ||
-      !Number.isFinite(item['amount']) ||
-      item['amount'] <= 0 ||
-      typeof item['month'] !== 'number' ||
-      !Number.isInteger(item['month']) ||
-      item['month'] < 1 ||
-      (item['type'] === 'recurring' &&
-        (typeof item['frequencyMonths'] !== 'number' ||
-          !Number.isInteger(item['frequencyMonths']) ||
-          item['frequencyMonths'] < 1))
-    )
-      return null;
-    parsedAmortizations.push({
-      id: item['id'],
-      name:
-        typeof item['name'] === 'string' && item['name'].trim()
-          ? item['name'].trim()
-          : `Amortización ${index + 1}`,
-      active: typeof item['active'] === 'boolean' ? item['active'] : true,
-      type: item['type'],
-      reductionType: reductionType === 'term' ? 'term' : 'payment',
-      amount: item['amount'],
-      month: item['month'],
-      ...(typeof item['frequencyMonths'] === 'number'
-        ? { frequencyMonths: item['frequencyMonths'] }
-        : {}),
-    });
-  }
-
-  return {
-    id,
-    name,
-    bank,
-    amount,
-    years,
-    interestRate,
-    rateType: value['rateType'] === 'variable' ? 'variable' : 'fixed',
-    startDate: typeof value['startDate'] === 'string' ? value['startDate'] : undefined,
-    bonuses: parsedBonuses,
-    amortizations: parsedAmortizations,
-    updatedAt:
-      typeof value['updatedAt'] === 'string' ? value['updatedAt'] : new Date().toISOString(),
-  };
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function readMortgages(): Mortgage[] {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored === null) return [];
-    const parsed: unknown = JSON.parse(stored);
-    if (!isRecord(parsed) || !Array.isArray(parsed['mortgages'])) return [];
-    const mortgages = parsed['mortgages'].map(parseMortgage);
-    return mortgages.every((mortgage) => mortgage !== null) ? (mortgages as Mortgage[]) : [];
-  } catch {
-    return [];
-  }
-}
-
 @Component({
   selector: 'app-workspace',
   imports: [
@@ -216,14 +97,17 @@ export class Workspace implements AfterViewInit, OnDestroy {
   @ViewChild('comparisonChart') private comparisonCanvas?: ElementRef<HTMLCanvasElement>;
   @ViewChild('costChart') private costCanvas?: ElementRef<HTMLCanvasElement>;
 
-  readonly mortgages = signal(readMortgages());
+  private readonly initialLoad = loadMortgages(localStorage);
+  readonly mortgages = signal(this.initialLoad.mortgages);
   readonly activeView = signal<ViewName>('dashboard');
   readonly selectedIds = signal(
     this.mortgages()
       .slice(0, 2)
       .map((mortgage) => mortgage.id),
   );
-  readonly status = signal('Tus datos se guardan automáticamente en este dispositivo.');
+  readonly status = signal(
+    this.initialLoad.notice ?? 'Tus datos se guardan automáticamente en este dispositivo.',
+  );
   readonly mortgageResults = computed(() =>
     this.mortgages().map((mortgage) => ({ mortgage, result: calculateMortgage(mortgage) })),
   );
@@ -236,6 +120,21 @@ export class Workspace implements AfterViewInit, OnDestroy {
   readonly cheapest = computed(() => this.lowest('totalCost'));
   readonly smallestPayment = computed(() => this.lowest('firstPayment'));
   readonly leastInterest = computed(() => this.lowest('totalInterest'));
+  readonly comparable = computed(() => {
+    const rows = this.selectedResults();
+    const first = rows[0]?.mortgage;
+    return (
+      !first ||
+      rows.every(
+        ({ mortgage }) => mortgage.amount === first.amount && mortgage.years === first.years,
+      )
+    );
+  });
+  readonly lowestRelativeCost = computed(() =>
+    this.selectedResults()
+      .map((item) => ({ ...item, relativeCost: this.relativeCost(item) }))
+      .sort((left, right) => left.relativeCost - right.relativeCost)[0] ?? null,
+  );
   readonly totalBonuses = computed(() =>
     this.selectedResults().reduce((total, item) => total + item.result.bonusCost, 0),
   );
@@ -298,14 +197,9 @@ export class Workspace implements AfterViewInit, OnDestroy {
   }
 
   saveMortgage(): void {
-    if (
-      !this.draft.name.trim() ||
-      !this.draft.bank.trim() ||
-      this.draft.amount <= 0 ||
-      this.draft.years <= 0 ||
-      !Number.isInteger(this.draft.years * 12)
-    ) {
-      this.status.set('Completa nombre, entidad, capital y plazo con valores válidos.');
+    const error = validateMortgage(this.draft);
+    if (error) {
+      this.status.set(error);
       return;
     }
     const saved = {
@@ -379,8 +273,12 @@ export class Workspace implements AfterViewInit, OnDestroy {
     return type === 'fixed' ? 'Fija' : 'Variable';
   }
 
+  relativeCost(item: { mortgage: Mortgage; result: MortgageResult }): number {
+    return relativeCostPer100(item.mortgage, item.result);
+  }
+
   exportData(): void {
-    const blob = new Blob([JSON.stringify({ mortgages: this.mortgages() }, null, 2)], {
+    const blob = new Blob([serializeMortgages(this.mortgages())], {
       type: 'application/json',
     });
     const url = URL.createObjectURL(blob);
@@ -397,20 +295,20 @@ export class Workspace implements AfterViewInit, OnDestroy {
     const file = input.files?.[0];
     if (!file) return;
     try {
-      const content: unknown = JSON.parse(await file.text());
-      if (!isRecord(content) || !Array.isArray(content['mortgages'])) throw new Error('invalid');
-      const mortgages = content['mortgages'].map(parseMortgage);
-      const valid = mortgages.every((mortgage) => mortgage !== null);
-      const ids = mortgages.map((mortgage) => mortgage?.id);
-      if (!valid || new Set(ids).size !== ids.length) throw new Error('invalid');
-      this.mortgages.set(mortgages as Mortgage[]);
-      this.selectedIds.set((mortgages as Mortgage[]).slice(0, 2).map((mortgage) => mortgage.id));
+      const result = parseMortgageFile(await file.text());
+      if (!result.ok) {
+        this.status.set(`No se pudo importar. ${result.error}`);
+        return;
+      }
+      const mortgages = result.value;
+      this.mortgages.set(mortgages);
+      this.selectedIds.set(mortgages.slice(0, 2).map((mortgage) => mortgage.id));
       this.editingId.set(null);
       this.draft = emptyMortgage();
       this.status.set('Importación completada.');
       this.commitChanges();
     } catch {
-      this.status.set('No se pudo importar: revisa que sea un JSON válido.');
+      this.status.set('No se pudo leer el archivo seleccionado.');
     } finally {
       input.value = '';
     }
@@ -434,7 +332,7 @@ export class Workspace implements AfterViewInit, OnDestroy {
 
   private commitChanges(): void {
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify({ mortgages: this.mortgages() }));
+      localStorage.setItem(STORAGE_KEY, serializeMortgages(this.mortgages()));
     } catch {
       this.status.set(
         'No se pudo guardar en este dispositivo. Exporta los escenarios para conservarlos.',
@@ -449,7 +347,12 @@ export class Workspace implements AfterViewInit, OnDestroy {
 
   private renderCharts(): void {
     const rows = this.selectedResults();
-    const labels = rows[0]?.result.rows.map((row) => row.month) ?? [];
+    const longest = rows.reduce<MortgageResult | null>(
+      (best, item) =>
+        !best || item.result.rows.length > best.rows.length ? item.result : best,
+      null,
+    );
+    const labels = longest?.rows.map((row) => row.month) ?? [];
     const lineData = rows.map((item, index) => ({
       label: item.mortgage.name,
       data: item.result.rows.map((row) => row.remainingCapital),

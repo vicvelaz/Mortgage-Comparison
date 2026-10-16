@@ -1,5 +1,13 @@
-import { Amortization, Bonus, Mortgage, Scenario, createId } from './mortgage-calculator';
-import { validateMortgage } from './mortgage-validation';
+import {
+  Amortization,
+  Bonus,
+  CancellationFees,
+  FeeTier,
+  Mortgage,
+  Scenario,
+  createId,
+} from './mortgage-calculator';
+import { validateCancellationFees, validateMortgage } from './mortgage-validation';
 
 export const STORAGE_KEY = 'hipoteca-comparador-v2';
 export const LEGACY_STORAGE_KEY = 'hipoteca-comparador-v1';
@@ -225,6 +233,8 @@ function parseMortgage(
     return invalid('los datos comunes no tienen el formato esperado.');
   }
 
+  const cancellationFees = parseCancellationFees(value['cancellationFees']);
+  if (!cancellationFees.ok) return invalid(cancellationFees.error);
   const candidate: Mortgage = {
     id: value['id'],
     name: value['name'],
@@ -233,6 +243,7 @@ function parseMortgage(
     years: value['years'],
     interestRate: value['interestRate'],
     rateType: value['rateType'],
+    cancellationFees: cancellationFees.value,
     ...(typeof value['startDate'] === 'string' ? { startDate: value['startDate'] } : {}),
     scenarios,
     updatedAt:
@@ -240,6 +251,41 @@ function parseMortgage(
   };
   const error = validateMortgage(candidate);
   return error ? invalid(error) : { ok: true, value: candidate };
+}
+
+function parseCancellationFees(value: unknown): ParseResult<CancellationFees> {
+  if (value === undefined) return { ok: true, value: { partial: [], total: [] } };
+  if (!isRecord(value) || !Array.isArray(value['partial']) || !Array.isArray(value['total'])) {
+    return { ok: false, error: 'las comisiones no tienen el formato esperado.' };
+  }
+  const parseTiers = (raw: unknown[]): ParseResult<FeeTier[]> => {
+    const tiers: FeeTier[] = [];
+    for (const item of raw) {
+      if (
+        !isRecord(item) ||
+        typeof item['fromMonth'] !== 'number' ||
+        typeof item['percent'] !== 'number' ||
+        (item['toMonth'] !== undefined &&
+          item['toMonth'] !== null &&
+          typeof item['toMonth'] !== 'number')
+      ) {
+        return { ok: false, error: 'un tramo de comisiones no tiene el formato esperado.' };
+      }
+      tiers.push({
+        fromMonth: item['fromMonth'],
+        percent: item['percent'],
+        ...(typeof item['toMonth'] === 'number' ? { toMonth: item['toMonth'] } : {}),
+      });
+    }
+    return { ok: true, value: tiers };
+  };
+  const partial = parseTiers(value['partial']);
+  if (!partial.ok) return partial;
+  const total = parseTiers(value['total']);
+  if (!total.ok) return total;
+  const fees = { partial: partial.value, total: total.value };
+  const error = validateCancellationFees(fees);
+  return error ? { ok: false, error } : { ok: true, value: fees };
 }
 
 function parseScenario(

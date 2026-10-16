@@ -80,6 +80,105 @@
   <div class="editor-divider"></div>
   <div class="subsection-heading">
     <div>
+      <p class="eyebrow">AMORTIZACIÓN ANTICIPADA</p>
+      <h3>Comisiones por amortización anticipada</h3>
+    </div>
+  </div>
+  <div class="fee-tier-grid">
+    <div>
+      <strong>Amortización parcial</strong>
+      @for (tier of feeTiers('partial'); track $index) {
+        <div class="fee-tier-row">
+          <span>Mes {{ tier.fromMonth }}–{{ tier.toMonth ?? 'fin' }} · {{ tier.percent }}%</span>
+          <button
+            type="button"
+            class="icon-button remove-button"
+            (click)="removeFeeTier('partial', $index)"
+            aria-label="Eliminar tramo parcial"
+          >
+            ×
+          </button>
+        </div>
+      } @empty {
+        <small>Sin comisión</small>
+      }
+    </div>
+    <div>
+      <strong>Cancelación total</strong>
+      @for (tier of feeTiers('total'); track $index) {
+        <div class="fee-tier-row">
+          <span>Mes {{ tier.fromMonth }}–{{ tier.toMonth ?? 'fin' }} · {{ tier.percent }}%</span>
+          <button
+            type="button"
+            class="icon-button remove-button"
+            (click)="removeFeeTier('total', $index)"
+            aria-label="Eliminar tramo total"
+          >
+            ×
+          </button>
+        </div>
+      } @empty {
+        <small>Sin comisión</small>
+      }
+    </div>
+  </div>
+  <div class="inline-form fee-form">
+    <label class="field"
+      ><span>Tipo de comisión</span
+      ><select name="feeType" [(ngModel)]="feeDraft.type">
+        <option value="partial">Parcial</option>
+        <option value="total">Total</option>
+      </select></label
+    >
+    <label class="field"
+      ><span>Desde mes</span
+      ><input name="feeFromMonth" type="number" min="1" [(ngModel)]="feeDraft.fromMonth"
+    /></label>
+    <label class="field"
+      ><span>Hasta mes</span
+      ><input
+        name="feeToMonth"
+        type="number"
+        min="1"
+        [(ngModel)]="feeDraft.toMonth"
+        placeholder="Fin"
+    /></label>
+    <label class="field"
+      ><span>Porcentaje</span>
+      <div class="input-suffix">
+        <input
+          name="feePercent"
+          type="number"
+          min="0"
+          step="0.05"
+          [(ngModel)]="feeDraft.percent"
+        /><span>%</span>
+      </div></label
+    >
+    <button class="button button-outline add-button" type="button" (click)="addFeeTier()">
+      Añadir tramo
+    </button>
+  </div>
+  <button class="link-button" type="button" (click)="loadLegalExample()">
+    Cargar ejemplo según Ley 5/2019
+  </button>
+
+  @if (draftResult?.totalCancellationMonth; as month) {
+    <div class="notice">
+      <span>i</span>
+      <p>Cancelación total en el mes {{ month }}.</p>
+    </div>
+  }
+  @if (draftResult?.recurringCancellationMonth; as month) {
+    <div class="notice">
+      <span>i</span>
+      <p>La hipoteca quedará cancelada en el mes {{ month }}.</p>
+    </div>
+  }
+
+  <div class="editor-divider"></div>
+  <div class="subsection-heading">
+    <div>
       <p class="eyebrow">VINCULACIONES</p>
       <h3>Bonificaciones</h3>
     </div>
@@ -90,7 +189,8 @@
       @for (bonus of scenario.bonuses; track bonus.id) {
         <div class="bonus-row">
           <mat-checkbox
-            [(ngModel)]="bonus.active"
+            [checked]="bonus.active"
+            (change)="setBonusActive(bonus.id, $event.checked)"
             [name]="'bonus-active-' + bonus.id"
           ></mat-checkbox>
           <span class="bonus-title"
@@ -172,7 +272,8 @@
       @for (item of scenario.amortizations; track item.id) {
         <div class="amortization-row">
           <mat-checkbox
-            [(ngModel)]="item.active"
+            [checked]="item.active"
+            (change)="setAmortizationActive(item.id, $event.checked)"
             [name]="'amortization-active-' + item.id"
             [attr.aria-label]="'Aplicar ' + item.name"
           ></mat-checkbox>
@@ -258,6 +359,13 @@
         </div></label
       >
     }
+    <button
+      class="button button-outline add-button"
+      type="button"
+      (click)="fillTotalCancellation()"
+    >
+      Cancelar totalmente
+    </button>
     <button class="button button-outline add-button" type="button" (click)="addAmortization()">
       Añadir amortización
     </button>
@@ -265,10 +373,11 @@
 
   <div class="editor-footer">
     <p>
-      El ahorro mostrado es solo en intereses; no incluye bonificaciones. Reducir plazo mantiene la
-      cuota; reducir cuota mantiene el plazo. El ahorro de cada amortización es incremental y
-      mantiene las demás activas. Si coinciden ambas estrategias en un mes, prevalece reducir plazo.
-      Guarda la oferta para actualizar las comparativas.
+      El ahorro neto compara el coste total con y sin amortizaciones e incluye comisiones y
+      bonificaciones evitadas. Reducir plazo mantiene la cuota; reducir cuota mantiene el plazo. El
+      ahorro de cada amortización es incremental y mantiene las demás activas. Si coinciden ambas
+      estrategias en un mes, prevalece reducir plazo. Los valores del ejemplo legal son
+      orientativos: revisa tu contrato. Guarda la oferta para actualizar las comparativas.
     </p>
     <button class="button button-primary" type="submit">Guardar oferta</button>
   </div>

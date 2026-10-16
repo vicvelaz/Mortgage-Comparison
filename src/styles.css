@@ -186,12 +186,19 @@ app-root { display: block; min-height: 100vh; }
 .offer-card-metrics small { margin-left: 2px; color: var(--muted); font-size: 9px; font-weight: 400; }
 .danger-link { display: block; margin: 4px 0 0 auto; color: #a36558; }
 .schedule-panel { margin-top: 14px; }
-.detail-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin: 16px 0; padding: 13px; background: #f7faf8; border-radius: 4px; }
+.detail-kpis { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin: 16px 0; padding: 13px; background: #f7faf8; border-radius: 4px; }
 .detail-kpis > div { min-width: 0; display: grid; gap: 6px; }
 .detail-kpis small { color: var(--muted); font-size: 9px; }
 .detail-kpis strong { overflow: hidden; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
 .detail-chart-frame { position: relative; width: 100%; height: 270px; margin: 8px 0 18px; }
 .positive-value { color: var(--teal) !important; }
+.negative-value { color: #b54343 !important; }
+.negative-notice { color: #a43838; background: #fff0ef; border-color: #f1cfcc; }
+.fee-tier-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin: 12px 0; }
+.fee-tier-grid > div { display: grid; align-content: start; gap: 6px; color: var(--ink); font-size: 10px; }
+.fee-tier-grid small { color: var(--muted); }
+.fee-tier-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 5px 8px; background: #f7faf8; border-radius: 3px; }
+.fee-form { margin-bottom: 9px; }
 .table-scroll { width: 100%; overflow: auto; }
 .schedule-table-wrap { max-height: 390px; border-top: 1px solid var(--line); }
 .data-table { width: 100%; border-collapse: collapse; font-size: 10px; font-variant-numeric: tabular-nums; white-space: nowrap; }
@@ -274,6 +281,9 @@ app-root { display: block; min-height: 100vh; }
 .picker-amount { color: #aebdb7; }
 .notice { color: #ead8a9; background: #342f22; border-color: #554a31; }
 .notice > span { border-color: #9f8852; }
+.negative-value { color: #ff8b7f !important; }
+.negative-notice { color: #ffaaa2; background: #3a2524; border-color: #68403d; }
+.fee-tier-row { background: #202c28; }
 .comparison-metric > span { color: #a4b2ad; }
 .comparison-table td:first-child small { color: var(--muted); }
 
@@ -285,6 +295,7 @@ app-root { display: block; min-height: 100vh; }
 	.kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 	.bonus-form { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 	.amortization-form { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+	.fee-form { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 	.add-button { width: max-content; }
 	.picker-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 	.comparison-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
@@ -325,7 +336,7 @@ app-root { display: block; min-height: 100vh; }
 	.selection-rate { width: 49px; }
 	.selection-payment { width: 86px; font-size: 10px; }
 	.form-grid { gap: 10px; }
-	.bonus-form, .amortization-form { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+	.bonus-form, .amortization-form, .fee-form { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 	.bonus-form .field:first-child { grid-column: 1 / -1; }
 	.add-button { width: max-content; }
 	.detail-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -353,7 +364,7 @@ app-root { display: block; min-height: 100vh; }
 	.field-wide { grid-column: auto; }
 	.editor-footer { align-items: flex-end; }
 	.editor-footer p { max-width: 135px; line-height: 1.4; }
-	.bonus-form, .amortization-form { grid-template-columns: 1fr 1fr; }
+	.bonus-form, .amortization-form, .fee-form { grid-template-columns: 1fr 1fr; }
 	.bonus-form .field:first-child { grid-column: 1 / -1; }
 	.comparison-kpis { gap: 7px; }
 	.comparison-metric { padding: 10px; }

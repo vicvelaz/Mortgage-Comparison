@@ -1,4 +1,6 @@
-import { MAX_TERM_YEARS } from './mortgage-validation';
+import { MAX_TERM_YEARS } from './mortgage-constants';
+
+export const RECURRING_OVERFLOW_POLICY: 'cap' | 'error' = 'cap';
 
 export interface Bonus {
   id: string;
@@ -21,10 +23,23 @@ export interface Amortization {
   frequencyMonths?: number;
 }
 
+export interface FeeTier {
+  fromMonth: number;
+  toMonth?: number;
+  percent: number;
+}
+
+export interface CancellationFees {
+  partial: FeeTier[];
+  total: FeeTier[];
+}
+
 export interface AmortizationEvent {
   id: string;
   name: string;
   amount: number;
+  fee: number;
+  totalCancellation: boolean;
 }
 
 export interface Scenario {
@@ -42,6 +57,7 @@ export interface Mortgage {
   years: number;
   interestRate: number;
   rateType: 'fixed' | 'variable';
+  cancellationFees: CancellationFees;
   startDate?: string;
   scenarios: Scenario[];
   updatedAt: string;
@@ -53,6 +69,7 @@ export interface AmortizationRow {
   interest: number;
   principal: number;
   extraPayment: number;
+  fee: number;
   amortizationEvents: AmortizationEvent[];
   remainingCapital: number;
   cumulativeInterest: number;
@@ -64,9 +81,12 @@ export interface MortgageResult {
   firstPayment: number;
   totalInterest: number;
   bonusCost: number;
+  amortizationFees: number;
   totalCost: number;
   remainingCapital: number;
   amortizationSavings: number;
+  totalCancellationMonth: number | null;
+  recurringCancellationMonth: number | null;
   amortizationInterestSavings: { id: string; savings: number }[];
   rateCapped: boolean;
   annualPercentageRate: number;
@@ -97,10 +117,11 @@ function amortizationsForMonth(
   scenario: Scenario,
   month: number,
   enabled: boolean,
+  excludedAmortizationId?: string,
 ): Amortization[] {
   if (!enabled) return [];
   return scenario.amortizations.filter((item) => {
-    if (!item.active) return false;
+    if (!item.active || item.id === excludedAmortizationId) return false;
     const applies =
       item.type === 'single'
         ? month === item.month
@@ -112,6 +133,28 @@ function amortizationsForMonth(
   });
 }
 
+function toCents(value: number): number {
+  if (!Number.isFinite(value)) return 0;
+  const cents = Math.round(value * 100);
+  return Number.isFinite(cents) ? cents : Math.sign(value) * Number.MAX_SAFE_INTEGER;
+}
+
+function fromCents(value: number): number {
+  return value / 100;
+}
+
+function roundCents(value: number): number {
+  return fromCents(toCents(value));
+}
+
+function feePercent(mortgage: Mortgage, month: number, total: boolean): number {
+  const tiers = total ? mortgage.cancellationFees?.total : mortgage.cancellationFees?.partial;
+  const tier = tiers?.find(
+    (item) => month >= item.fromMonth && month <= (item.toMonth ?? Infinity),
+  );
+  return tier && Number.isFinite(tier.percent) && tier.percent >= 0 ? tier.percent : 0;
+}
+
 type ScheduleResult = Omit<
   MortgageResult,
   'amortizationSavings' | 'amortizationInterestSavings' | 'annualPercentageRate'
@@ -121,6 +164,8 @@ function calculateSchedule(
   mortgage: Mortgage,
   scenario: Scenario,
   includeAmortizations: boolean,
+  maxMonth: number = mortgage.years * 12,
+  excludedAmortizationId?: string,
 ): ScheduleResult {
   const plannedMonths = mortgage.years * 12;
   if (!Number.isInteger(plannedMonths) || plannedMonths < 1) {
@@ -129,14 +174,17 @@ function calculateSchedule(
   let remaining = Math.max(0, mortgage.amount);
   let totalInterest = 0;
   let bonusCost = 0;
+  let amortizationFees = 0;
   let cumulativePrincipal = 0;
   let fixedPayment: number | null = null;
   let previousMonthlyRate: number | null = null;
   let rateCapped = false;
+  let totalCancellationMonth: number | null = null;
+  let recurringCancellationMonth: number | null = null;
   const cashFlows: number[] = [];
   const rows: AmortizationRow[] = [];
 
-  for (let month = 1; month <= plannedMonths && remaining > 0; month += 1) {
+  for (let month = 1; month <= Math.min(plannedMonths, maxMonth) && remaining > 0; month += 1) {
     const { reduction, cost } = bonusForMonth(scenario, month);
     if (reduction > mortgage.interestRate) rateCapped = true;
     const annualRate = Math.max(0, mortgage.interestRate - reduction);
@@ -154,22 +202,41 @@ function calculateSchedule(
     const scheduledPrincipal = Math.min(remaining, scheduledPayment - interest);
     remaining -= scheduledPrincipal;
     const amortizationEvents: AmortizationEvent[] = [];
-    const monthAmortizations = amortizationsForMonth(scenario, month, includeAmortizations).sort(
+    const monthAmortizations = amortizationsForMonth(
+      scenario,
+      month,
+      includeAmortizations,
+      excludedAmortizationId,
+    ).sort(
       (left, right) =>
         Number(left.reductionType === 'term') - Number(right.reductionType === 'term'),
     );
     let nextPayment: number = fixedPayment ?? scheduledPayment;
     let extraPayment = 0;
+    let fee = 0;
     for (const item of monthAmortizations) {
-      const amount = Math.min(remaining, Math.max(0, item.amount));
+      const requestedCents = toCents(item.amount);
+      const balanceCents = toCents(remaining);
+      if (requestedCents <= 0 || balanceCents <= 0) continue;
+      const totalCancellation = requestedCents >= balanceCents;
+      const amount = totalCancellation ? remaining : Math.min(remaining, fromCents(requestedCents));
       if (amount <= 0) continue;
-      remaining -= amount;
+      const percent = feePercent(mortgage, month, totalCancellation);
+      const eventFee = roundCents((amount * percent) / 100);
+      remaining = totalCancellation ? 0 : Math.max(0, remaining - amount);
       extraPayment += amount;
+      fee += eventFee;
       amortizationEvents.push({
         id: item.id,
         name: item.name,
         amount,
+        fee: eventFee,
+        totalCancellation,
       });
+      if (totalCancellation) {
+        totalCancellationMonth ??= month;
+        if (item.type === 'recurring') recurringCancellationMonth ??= month;
+      }
       if (item.reductionType === 'payment' && monthsLeft > 1 && remaining > 0) {
         nextPayment = monthlyPayment(remaining, monthlyRate, monthsLeft - 1);
       }
@@ -181,8 +248,9 @@ function calculateSchedule(
     remaining = Math.max(0, remaining);
     totalInterest += interest;
     bonusCost += cost;
+    amortizationFees += fee;
     cumulativePrincipal += principal;
-    cashFlows.push(interest + scheduledPrincipal + extraPayment + cost);
+    cashFlows.push(interest + scheduledPrincipal + extraPayment + cost + fee);
 
     rows.push({
       month,
@@ -190,6 +258,7 @@ function calculateSchedule(
       interest,
       principal,
       extraPayment,
+      fee,
       amortizationEvents,
       remainingCapital: remaining,
       cumulativeInterest: totalInterest,
@@ -202,8 +271,11 @@ function calculateSchedule(
     firstPayment: rows[0]?.payment ?? 0,
     totalInterest,
     bonusCost,
-    totalCost: mortgage.amount - remaining + totalInterest + bonusCost,
+    amortizationFees,
+    totalCost: mortgage.amount - remaining + totalInterest + bonusCost + amortizationFees,
     remainingCapital: remaining,
+    totalCancellationMonth,
+    recurringCancellationMonth,
     rateCapped,
     cashFlows,
   };
@@ -260,10 +332,22 @@ export function calculateMortgage(mortgage: Mortgage, scenario: Scenario): Mortg
   }));
   return {
     ...result,
-    amortizationSavings: Math.max(0, withoutAmortizations.totalInterest - result.totalInterest),
+    amortizationSavings: withoutAmortizations.totalCost - result.totalCost,
     amortizationInterestSavings,
     annualPercentageRate: annualPercentageRate(mortgage.amount, cashFlows),
   };
+}
+
+export function maxAmortizableAt(
+  mortgage: Mortgage,
+  scenario: Scenario,
+  month: number,
+  excludingAmortizationId?: string,
+): number {
+  if (!isCalculable(mortgage) || !Number.isInteger(month) || month < 1) return 0;
+  const result = calculateSchedule(mortgage, scenario, true, month, excludingAmortizationId);
+  const row = result.rows.find((item) => item.month === month);
+  return row ? toCents(row.remainingCapital) : 0;
 }
 
 /**
@@ -272,10 +356,12 @@ export function calculateMortgage(mortgage: Mortgage, scenario: Scenario): Mortg
  */
 export function relativeCostPer100(
   mortgage: Pick<Mortgage, 'amount'>,
-  result: Pick<MortgageResult, 'totalInterest' | 'bonusCost'>,
+  result: Pick<MortgageResult, 'totalInterest' | 'bonusCost' | 'amortizationFees'>,
 ): number {
   if (mortgage.amount <= 0) return 0;
-  return ((result.totalInterest + result.bonusCost) / mortgage.amount) * 100;
+  return (
+    ((result.totalInterest + result.bonusCost + result.amortizationFees) / mortgage.amount) * 100
+  );
 }
 
 function isCalculable(mortgage: Mortgage): boolean {
@@ -283,6 +369,8 @@ function isCalculable(mortgage: Mortgage): boolean {
     Number.isFinite(mortgage.amount) &&
     Number.isFinite(mortgage.interestRate) &&
     Number.isFinite(mortgage.years) &&
+    mortgage.amount >= 0 &&
+    mortgage.interestRate >= 0 &&
     mortgage.years >= 1 &&
     mortgage.years <= MAX_TERM_YEARS &&
     Number.isInteger(mortgage.years * 12)
@@ -292,13 +380,19 @@ function isCalculable(mortgage: Mortgage): boolean {
 function isFiniteResult(
   result: Pick<
     MortgageResult,
-    'firstPayment' | 'totalInterest' | 'bonusCost' | 'totalCost' | 'remainingCapital'
+    | 'firstPayment'
+    | 'totalInterest'
+    | 'bonusCost'
+    | 'amortizationFees'
+    | 'totalCost'
+    | 'remainingCapital'
   >,
 ): boolean {
   return [
     result.firstPayment,
     result.totalInterest,
     result.bonusCost,
+    result.amortizationFees,
     result.totalCost,
     result.remainingCapital,
   ].every((value) => Number.isFinite(value));
@@ -310,9 +404,12 @@ function emptyResult(): MortgageResult {
     firstPayment: 0,
     totalInterest: 0,
     bonusCost: 0,
+    amortizationFees: 0,
     totalCost: 0,
     remainingCapital: 0,
     amortizationSavings: 0,
+    totalCancellationMonth: null,
+    recurringCancellationMonth: null,
     amortizationInterestSavings: [],
     rateCapped: false,
     annualPercentageRate: 0,

@@ -25,7 +25,10 @@ function offer(overrides: OfferOverrides = {}): Mortgage {
     years: 25,
     interestRate: 3,
     rateType: 'fixed',
-    scenarios: scenarios ?? [{ id: `${overrides.id ?? 'o1'}-base`, name: 'Base', bonuses, amortizations }],
+    cancellationFees: { partial: [], total: [] },
+    scenarios: scenarios ?? [
+      { id: `${overrides.id ?? 'o1'}-base`, name: 'Base', bonuses, amortizations },
+    ],
     updatedAt: new Date(0).toISOString(),
     ...common,
   };
@@ -106,7 +109,13 @@ describe('QA: validación de ofertas en Workspace', () => {
       form.notify.subscribe((message: string) => messages.push(message));
       form.draft = offer();
       form.scenario = form.draft.scenarios[0];
-      form.bonusDraft = { name: 'Seguro', interestReduction: 0.2, annualCost: 0, startMonth: 50, endMonth: 10 };
+      form.bonusDraft = {
+        name: 'Seguro',
+        interestReduction: 0.2,
+        annualCost: 0,
+        startMonth: 50,
+        endMonth: 10,
+      };
 
       form.addBonus();
 
@@ -119,7 +128,13 @@ describe('QA: validación de ofertas en Workspace', () => {
       const form = new MortgageFormComponent();
       form.draft = offer();
       form.scenario = form.draft.scenarios[0];
-      form.bonusDraft = { name: 'Seguro', interestReduction: 0.2, annualCost: 0, startMonth: 1, endMonth: null };
+      form.bonusDraft = {
+        name: 'Seguro',
+        interestReduction: 0.2,
+        annualCost: 0,
+        startMonth: 1,
+        endMonth: null,
+      };
 
       form.addBonus();
 
@@ -127,7 +142,7 @@ describe('QA: validación de ofertas en Workspace', () => {
       expect(form.scenario.bonuses[0].endMonth).toBeUndefined();
     });
 
-    it('avisa de una amortización que cae fuera del plazo sin bloquearla', () => {
+    it('rechaza una amortización que cae fuera del plazo', () => {
       const form = new MortgageFormComponent();
       const messages: string[] = [];
       form.notify.subscribe((message: string) => messages.push(message));
@@ -144,8 +159,8 @@ describe('QA: validación de ofertas en Workspace', () => {
 
       form.addAmortization();
 
-      expect(form.scenario.amortizations).toHaveLength(1);
-      expect(messages).toEqual([expect.stringContaining('fuera del plazo')]);
+      expect(form.scenario.amortizations).toHaveLength(0);
+      expect(messages).toEqual(['La hipoteca ya está cancelada o termina antes del mes 400.']);
     });
 
     it('muestra un error al añadir una amortización inválida', () => {
@@ -197,7 +212,10 @@ describe('QA: comparador de ofertas no comparables (F3)', () => {
   it('no muestra aviso con ofertas de igual capital y plazo', () => {
     const fixture = TestBed.createComponent(Workspace);
     const workspace = fixture.componentInstance;
-    workspace.mortgages.set([lowAmount, offer({ id: 'c', name: 'Oferta C', amount: 100000, interestRate: 2 })]);
+    workspace.mortgages.set([
+      lowAmount,
+      offer({ id: 'c', name: 'Oferta C', amount: 100000, interestRate: 2 }),
+    ]);
     workspace.selectedIds.set([JSON.stringify(['a', 'a-base']), JSON.stringify(['c', 'c-base'])]);
     fixture.detectChanges();
 
@@ -245,13 +263,29 @@ describe('QA: gestión de escenarios', () => {
         {
           id: 'base',
           name: 'Base',
-          bonuses: [{ id: 'base-bonus', name: 'Bono base', active: true, interestReduction: 0.2, annualCost: 0 }],
+          bonuses: [
+            {
+              id: 'base-bonus',
+              name: 'Bono base',
+              active: true,
+              interestReduction: 0.2,
+              annualCost: 0,
+            },
+          ],
           amortizations: [],
         },
         {
           id: 'alternative',
           name: 'Alternativo',
-          bonuses: [{ id: 'alt-bonus', name: 'Bono alternativo', active: true, interestReduction: 0.5, annualCost: 0 }],
+          bonuses: [
+            {
+              id: 'alt-bonus',
+              name: 'Bono alternativo',
+              active: true,
+              interestReduction: 0.5,
+              annualCost: 0,
+            },
+          ],
           amortizations: [],
         },
       ],
@@ -278,20 +312,26 @@ describe('QA: gestión de escenarios', () => {
   it('duplica escenarios con identificadores y contenido independientes', () => {
     const workspace = createWorkspace();
     workspace.draft = offer({
-      scenarios: [{
-        id: 'base',
-        name: 'Base',
-        bonuses: [{ id: 'bonus', name: 'Nómina', active: true, interestReduction: 0.5, annualCost: 0 }],
-        amortizations: [{
-          id: 'extra',
-          name: 'Extra',
-          active: true,
-          type: 'single',
-          reductionType: 'term',
-          amount: 1000,
-          month: 12,
-        }],
-      }],
+      scenarios: [
+        {
+          id: 'base',
+          name: 'Base',
+          bonuses: [
+            { id: 'bonus', name: 'Nómina', active: true, interestReduction: 0.5, annualCost: 0 },
+          ],
+          amortizations: [
+            {
+              id: 'extra',
+              name: 'Extra',
+              active: true,
+              type: 'single',
+              reductionType: 'term',
+              amount: 1000,
+              month: 12,
+            },
+          ],
+        },
+      ],
     });
     workspace.selectedScenarioId.set('base');
 
@@ -362,29 +402,40 @@ describe('QA: motor de cálculo', () => {
 
   it('eleva la TAE cuando hay coste de bonificaciones (F3)', () => {
     const plain = calculateMortgage(offer({ interestRate: 3 }));
-    const withCost = calculateMortgage(offer({
-      interestRate: 3,
-      bonuses: [{ id: 'b', name: 'Seguro', active: true, interestReduction: 0, annualCost: 1200 }],
-    }));
+    const withCost = calculateMortgage(
+      offer({
+        interestRate: 3,
+        bonuses: [
+          { id: 'b', name: 'Seguro', active: true, interestReduction: 0, annualCost: 1200 },
+        ],
+      }),
+    );
 
     expect(withCost.annualPercentageRate).toBeGreaterThan(plain.annualPercentageRate);
   });
 
-  it.each([30000, 100000, 500000])('nunca devuelve NaN ni Infinity con un plazo de %s años (F7)', (years) => {
-    const result = calculateMortgage(offer({ years }));
-    const scalars = [
-      result.firstPayment,
-      result.totalInterest,
-      result.totalCost,
-      result.remainingCapital,
-      result.bonusCost,
-      result.amortizationSavings,
-      result.annualPercentageRate,
-    ];
+  it.each([30000, 100000, 500000])(
+    'nunca devuelve NaN ni Infinity con un plazo de %s años (F7)',
+    (years) => {
+      const result = calculateMortgage(offer({ years }));
+      const scalars = [
+        result.firstPayment,
+        result.totalInterest,
+        result.totalCost,
+        result.remainingCapital,
+        result.bonusCost,
+        result.amortizationSavings,
+        result.annualPercentageRate,
+      ];
 
-    expect(scalars.every((value) => Number.isFinite(value))).toBe(true);
-    expect(result.rows.every((row) => Number.isFinite(row.payment) && Number.isFinite(row.remainingCapital))).toBe(true);
-  });
+      expect(scalars.every((value) => Number.isFinite(value))).toBe(true);
+      expect(
+        result.rows.every(
+          (row) => Number.isFinite(row.payment) && Number.isFinite(row.remainingCapital),
+        ),
+      ).toBe(true);
+    },
+  );
 
   it('no devuelve valores no finitos con importes o tipos enormes (F7)', () => {
     const result = calculateMortgage(offer({ amount: 1e308, interestRate: 1e308 }));

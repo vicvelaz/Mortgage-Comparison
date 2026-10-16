@@ -16,6 +16,7 @@ const base: Mortgage = {
   years: 25,
   interestRate: 3.1,
   rateType: 'fixed',
+  cancellationFees: { partial: [], total: [] },
   startDate: '2026-01-01',
   scenarios: [
     {
@@ -114,6 +115,52 @@ describe('mortgage-storage: ida y vuelta de exportación (F5)', () => {
     }
   });
 
+  it('añade comisiones vacías al importar datos v2 anteriores a la configuración', () => {
+    const oldVersionTwo = {
+      ...base,
+      cancellationFees: undefined,
+    };
+    const result = parseMortgageFile(
+      JSON.stringify({ schemaVersion: 2, mortgages: [oldVersionTwo] }),
+    );
+
+    expect(result).toEqual({
+      ok: true,
+      value: [{ ...base, cancellationFees: { partial: [], total: [] } }],
+    });
+  });
+
+  it('rechaza importaciones con amortizaciones excesivas e identifica el escenario', () => {
+    const invalid = {
+      ...base,
+      scenarios: [
+        {
+          ...base.scenarios[0],
+          name: 'Escenario excesivo',
+          amortizations: [
+            ...base.scenarios[0].amortizations,
+            {
+              id: 'too-much',
+              name: 'Exceso',
+              active: true,
+              type: 'single' as const,
+              reductionType: 'payment' as const,
+              amount: 1_000_000,
+              month: 36,
+            },
+          ],
+        },
+      ],
+    };
+    const result = parseMortgageFile(serializeMortgages([invalid]));
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error).toContain('Oferta inválida «Fija bonificada»');
+      expect(result.error).toContain('En el escenario «Escenario excesivo»');
+    }
+  });
+
   it('siempre exporta la versión 2', () => {
     expect(JSON.parse(serializeMortgages([base]))).toMatchObject({
       schemaVersion: 2,
@@ -178,6 +225,37 @@ describe('mortgage-storage: carga desde localStorage (F6)', () => {
 
     expect(loaded.mortgages.map((item) => item.id)).toEqual(['oferta-1', 'oferta-2']);
     expect(loaded.notice).toBe('Se recuperaron 2 de 3 ofertas. Se guardó una copia de seguridad.');
+    expect(storage.data.get(backupKey)).toBe(raw);
+  });
+
+  it('descarta y respalda ofertas cargadas con amortizaciones inválidas', () => {
+    const invalid = {
+      ...base,
+      scenarios: [
+        {
+          ...base.scenarios[0],
+          amortizations: [
+            ...base.scenarios[0].amortizations,
+            {
+              id: 'too-much',
+              name: 'Exceso',
+              active: true,
+              type: 'single' as const,
+              reductionType: 'payment' as const,
+              amount: 1_000_000,
+              month: 36,
+            },
+          ],
+        },
+      ],
+    };
+    const raw = serializeMortgages([invalid]);
+    const storage = fakeStorage({ [STORAGE_KEY]: raw });
+
+    const loaded = loadMortgages(storage, now);
+
+    expect(loaded.mortgages).toEqual([]);
+    expect(loaded.notice).toContain('Se recuperaron 0 de 1 oferta');
     expect(storage.data.get(backupKey)).toBe(raw);
   });
 

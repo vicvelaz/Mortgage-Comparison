@@ -424,9 +424,9 @@
             ><small>En ofertas seleccionadas</small>
           </article>
           <article class="comparison-metric">
-            <span>AHORRO EN INTERESES (AMORTIZ.)</span
+            <span>AHORRO NETO POR AMORTIZACIONES</span
             ><strong>{{ currency(totalSavings()) }}</strong
-            ><small>Solo intereses; sin bonificaciones</small>
+            ><small>Incluye comisiones por amortización</small>
           </article>
           <article class="comparison-metric">
             <span>MEJOR COSTE POR 100 €</span
@@ -445,10 +445,13 @@
                 <h2>Desglose por oferta</h2>
               </div>
             </div>
-            <app-chart-viewport class="chart-frame" label="Costes, intereses y bonificaciones">
+            <app-chart-viewport
+              class="chart-frame"
+              label="Costes, intereses, bonificaciones y comisiones"
+            >
               <canvas
                 #costChart
-                aria-label="Gráfico de costes, intereses y bonificaciones"
+                aria-label="Gráfico de costes, intereses, bonificaciones y comisiones"
               ></canvas>
             </app-chart-viewport>
           </section>
@@ -485,8 +488,9 @@
                   <th>Cuota inicial</th>
                   <th>Intereses</th>
                   <th>Bonificaciones</th>
+                  <th>Comisiones por amortización</th>
                   <th>Total pagado</th>
-                  <th>Ahorro intereses</th>
+                  <th>Ahorro neto por amortizaciones</th>
                   <th>TAE aprox.</th>
                   <th>Coste por 100 €</th>
                 </tr>
@@ -503,14 +507,23 @@
                     <td>{{ currency(item.result.firstPayment) }}</td>
                     <td>{{ currency(item.result.totalInterest) }}</td>
                     <td>{{ currency(item.result.bonusCost) }}</td>
+                    <td>{{ currency(item.result.amortizationFees) }}</td>
                     <td class="table-strong">{{ currency(item.result.totalCost) }}</td>
-                    <td class="positive-value">{{ currency(item.result.amortizationSavings) }}</td>
+                    <td
+                      [class.positive-value]="item.result.amortizationSavings >= 0"
+                      [class.negative-value]="item.result.amortizationSavings < 0"
+                    >
+                      {{ currency(item.result.amortizationSavings) }}
+                      @if (item.result.amortizationSavings < 0) {
+                        <small class="negative-value">Amortizar cuesta más de lo que ahorra</small>
+                      }
+                    </td>
                     <td>{{ item.result.annualPercentageRate | number: '1.2-2' }}%</td>
                     <td>{{ currency(relativeCost(item)) }}</td>
                   </tr>
                 } @empty {
                   <tr>
-                    <td colspan="10" class="empty-cell">
+                    <td colspan="11" class="empty-cell">
                       Selecciona ofertas para mostrar los resultados.
                     </td>
                   </tr>
@@ -523,9 +536,10 @@
             modelan revisiones de índice.
           </p>
           <p class="method-note">
-            Total pagado = capital devuelto + intereses + bonificaciones. Ahorro en intereses: solo
-            intereses evitados por las amortizaciones. TAE aprox.: orientativa, incluye
-            bonificaciones y no sustituye a la FEE. Coste por 100 € = (intereses + bonificaciones) /
+            Total pagado = capital devuelto + intereses + bonificaciones + comisiones por
+            amortización. Ahorro neto = coste sin amortizaciones menos coste con amortizaciones y
+            comisiones. TAE aprox.: orientativa, incluye bonificaciones, comisiones y no sustituye a
+            la FEE. Coste por 100 € = (intereses + bonificaciones + comisiones por amortización) /
             capital × 100.
           </p>
         </section>

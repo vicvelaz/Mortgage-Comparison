@@ -14,13 +14,39 @@
       <small>Intereses totales</small><strong>{{ currency(detail.result.totalInterest) }}</strong>
     </div>
     <div>
+      <small>Comisiones por amortización</small
+      ><strong>{{ currency(detail.result.amortizationFees) }}</strong>
+    </div>
+    <div>
       <small>Coste total</small><strong>{{ currency(detail.result.totalCost) }}</strong>
     </div>
     <div>
-      <small>Ahorro por amortizar</small
-      ><strong class="positive-value">{{ currency(detail.result.amortizationSavings) }}</strong>
+      <small>Ahorro neto por amortizar</small
+      ><strong
+        [class.positive-value]="detail.result.amortizationSavings >= 0"
+        [class.negative-value]="detail.result.amortizationSavings < 0"
+        >{{ currency(detail.result.amortizationSavings) }}</strong
+      >
     </div>
   </div>
+  @if (detail.result.amortizationSavings < 0) {
+    <div class="notice negative-notice">
+      <span>!</span>
+      <p>Amortizar cuesta más de lo que ahorra.</p>
+    </div>
+  }
+  @if (detail.result.totalCancellationMonth; as month) {
+    <div class="notice">
+      <span>i</span>
+      <p>Cancelación total en el mes {{ month }}.</p>
+    </div>
+  }
+  @if (detail.result.recurringCancellationMonth; as month) {
+    <div class="notice">
+      <span>i</span>
+      <p>La hipoteca quedará cancelada en el mes {{ month }}.</p>
+    </div>
+  }
   <app-chart-viewport
     class="detail-chart-frame"
     label="Capital e intereses del calendario de amortización"
@@ -39,6 +65,7 @@
           <th>Interés</th>
           <th>Capital</th>
           <th>Extra</th>
+          <th>Comisiones</th>
           <th>Capital pendiente</th>
         </tr>
       </thead>
@@ -62,6 +89,7 @@
                 ></span>
               }
             </td>
+            <td>{{ row.fee ? currency(row.fee) : '—' }}</td>
             <td>{{ currency(row.remainingCapital) }}</td>
           </tr>
         }

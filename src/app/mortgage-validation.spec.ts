@@ -1,4 +1,9 @@
-import { validateAmortization, validateBonus, validateMortgage } from './mortgage-validation';
+import {
+  validateAmortization,
+  validateBonus,
+  validateCancellationFees,
+  validateMortgage,
+} from './mortgage-validation';
 
 const validMortgage = {
   name: 'Fija',
@@ -45,6 +50,47 @@ describe('mortgage-validation', () => {
     expect(validateMortgage({ ...validMortgage, interestRate: null })).toBe(
       'Indica un tipo de interés igual o superior a 0.',
     );
+  });
+
+  describe('comisiones por amortización anticipada', () => {
+    it('acepta tramos válidos y el fin abierto', () => {
+      expect(
+        validateCancellationFees({
+          partial: [
+            { fromMonth: 1, toMonth: 24, percent: 1 },
+            { fromMonth: 25, percent: 0.5 },
+          ],
+          total: [],
+        }),
+      ).toBeNull();
+    });
+
+    it('rechaza tramos solapados e informa los meses', () => {
+      expect(
+        validateCancellationFees({
+          partial: [
+            { fromMonth: 1, toMonth: 24, percent: 1 },
+            { fromMonth: 20, percent: 0.5 },
+          ],
+          total: [],
+        }),
+      ).toContain('se solapan en los meses 20–24');
+    });
+
+    it('rechaza porcentajes negativos y límites de meses inválidos', () => {
+      expect(
+        validateCancellationFees({
+          partial: [{ fromMonth: 1, percent: -1 }],
+          total: [],
+        }),
+      ).toContain('igual o superior a 0');
+      expect(
+        validateCancellationFees({
+          partial: [{ fromMonth: 12, toMonth: 3, percent: 0 }],
+          total: [],
+        }),
+      ).toContain('no puede ser anterior');
+    });
   });
 
   describe('bonificaciones', () => {

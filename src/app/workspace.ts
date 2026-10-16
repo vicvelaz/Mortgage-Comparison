@@ -81,6 +81,7 @@ function emptyMortgage(): Mortgage {
     years: 25,
     interestRate: 3.1,
     rateType: 'fixed',
+    cancellationFees: { partial: [], total: [] },
     scenarios: [{ id: createId(), name: 'Base', bonuses: [], amortizations: [] }],
     updatedAt: new Date().toISOString(),
   };
@@ -520,10 +521,15 @@ export class Workspace implements AfterViewInit, OnDestroy {
       this.costChart = new Chart(this.costCanvas.nativeElement, {
         type: 'bar',
         data: {
-          labels: ['Coste total', 'Intereses', 'Bonificaciones'],
+          labels: ['Coste total', 'Intereses', 'Bonificaciones', 'Comisiones por amortización'],
           datasets: rows.map((item, index) => ({
             label: `${item.mortgage.name} · ${item.scenario.name}`,
-            data: [item.result.totalCost, item.result.totalInterest, item.result.bonusCost],
+            data: [
+              item.result.totalCost,
+              item.result.totalInterest,
+              item.result.bonusCost,
+              item.result.amortizationFees,
+            ],
             backgroundColor: chartColors[index % chartColors.length],
             borderRadius: 3,
           })),

@@ -29,6 +29,30 @@
       >
     </div>
   </div>
+  @if (detail.result.rows.length > 0) {
+    <section class="payment-summary" aria-label="Desglose de la primera y última cuota">
+      <div class="payment-summary-heading">
+        <h3>Cuotas de referencia</h3>
+        <span>Interés y capital ordinario</span>
+      </div>
+      <div class="payment-summary-grid">
+        @for (row of paymentSummaryRows(); track row.month) {
+          <article class="payment-summary-card">
+            <small>{{ paymentSummaryLabel(row.month) }}</small>
+            <strong>{{ currency(row.payment) }}</strong>
+            <span
+              >Interés: {{ currency(row.interest) }}
+              <b>{{ paymentPercentage(row.interest, row.payment) }}</b></span
+            >
+            <span
+              >Capital: {{ currency(row.principal) }}
+              <b>{{ paymentPercentage(row.principal, row.payment) }}</b></span
+            >
+          </article>
+        }
+      </div>
+    </section>
+  }
   @if (detail.result.amortizationSavings < 0) {
     <div class="notice negative-notice">
       <span>!</span>
@@ -62,6 +86,36 @@
       aria-label="Evolución del capital pendiente, intereses acumulados y capital amortizado"
     ></canvas>
   </app-chart-viewport>
+  <section class="payment-breakdown-chart">
+    <div class="payment-summary-heading">
+      <h3>Desglose de pagos</h3>
+      <div class="chart-period-toggle" role="group" aria-label="Periodo del gráfico de pagos">
+        <button
+          type="button"
+          [attr.aria-pressed]="chartPeriod === 'annual'"
+          (click)="setChartPeriod('annual')"
+        >
+          Anual
+        </button>
+        <button
+          type="button"
+          [attr.aria-pressed]="chartPeriod === 'monthly'"
+          (click)="setChartPeriod('monthly')"
+        >
+          Mensual
+        </button>
+      </div>
+    </div>
+    <app-chart-viewport
+      class="detail-chart-frame"
+      label="Desglose anual o mensual de intereses, capital ordinario y amortización extra"
+    >
+      <canvas
+        #breakdownChart
+        aria-label="Gráfico apilado de intereses, capital ordinario y amortización extra"
+      ></canvas>
+    </app-chart-viewport>
+  </section>
   <div class="table-scroll schedule-table-wrap">
     <table class="data-table">
       <thead>
@@ -69,7 +123,9 @@
           <th>Mes</th>
           <th>Cuota ordinaria</th>
           <th>Interés</th>
+          <th>% intereses</th>
           <th>Capital</th>
+          <th>% capital</th>
           <th>Amortización extra</th>
           <th>Comisiones</th>
           <th>Capital pendiente</th>
@@ -81,7 +137,9 @@
             <td>{{ row.month }}</td>
             <td>{{ currency(row.payment) }}</td>
             <td>{{ currency(row.interest) }}</td>
+            <td>{{ paymentPercentage(row.interest, row.payment) }}</td>
             <td>{{ currency(row.principal) }}</td>
+            <td>{{ paymentPercentage(row.principal, row.payment) }}</td>
             <td class="extra-payment-cell">
               {{ row.extraPayment ? currency(row.extraPayment) : '—' }}
               @for (event of row.amortizationEvents; track event.id) {

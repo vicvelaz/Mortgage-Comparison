@@ -72,6 +72,14 @@ interface ScenarioResult {
   result: MortgageResult;
 }
 
+export function comparisonMonthLabels(results: readonly { result: MortgageResult }[]): number[] {
+  const longest = results.reduce<MortgageResult | null>(
+    (best, item) => (!best || item.result.rows.length > best.rows.length ? item.result : best),
+    null,
+  );
+  return longest?.rows.map((row) => row.month) ?? [];
+}
+
 function emptyMortgage(): Mortgage {
   return {
     id: createId(),
@@ -97,6 +105,10 @@ function emptyMortgage(): Mortgage {
 
 function scenarioKey(mortgageId: string, scenarioId: string): string {
   return JSON.stringify([mortgageId, scenarioId]);
+}
+
+function differenceInCents(left: number, right: number): number {
+  return (Math.round(left * 100) - Math.round(right * 100)) / 100;
 }
 
 @Component({
@@ -163,6 +175,28 @@ export class Workspace implements AfterViewInit, OnDestroy {
         ({ mortgage }) => mortgage.amount === first.amount && mortgage.years === first.years,
       )
     );
+  });
+  readonly comparisonDifferences = computed(() => {
+    const rows = this.selectedResults();
+    const mortgage = rows[0]?.mortgage;
+    if (!mortgage || rows.length < 2 || rows.some((item) => item.mortgage.id !== mortgage.id)) {
+      return null;
+    }
+    const baseScenario = mortgage.scenarios[0];
+    const base = this.mortgageResults().find(
+      (item) => item.mortgage.id === mortgage.id && item.scenario.id === baseScenario?.id,
+    );
+    if (!base) return null;
+    return rows.map((item) => ({
+      ...item,
+      interestSavings: differenceInCents(base.result.totalInterest, item.result.totalInterest),
+      totalCostSavings: differenceInCents(base.result.totalCost, item.result.totalCost),
+      monthsSaved: base.result.rows.length - item.result.rows.length,
+      initialPaymentDifference: differenceInCents(
+        item.result.firstPayment,
+        base.result.firstPayment,
+      ),
+    }));
   });
   readonly lowestRelativeCost = computed(
     () =>
@@ -474,11 +508,7 @@ export class Workspace implements AfterViewInit, OnDestroy {
 
   private renderCharts(): void {
     const rows = this.selectedResults();
-    const longest = rows.reduce<MortgageResult | null>(
-      (best, item) => (!best || item.result.rows.length > best.rows.length ? item.result : best),
-      null,
-    );
-    const labels = longest?.rows.map((row) => row.month) ?? [];
+    const labels = comparisonMonthLabels(rows);
     const lineData = rows.map((item, index) => ({
       label: `${item.mortgage.name} · ${item.scenario.name}`,
       data: item.result.rows.map((row) => row.remainingCapital),

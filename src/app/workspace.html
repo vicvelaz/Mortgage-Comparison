@@ -437,6 +437,53 @@
           </article>
         </div>
 
+        @if (comparisonDifferences(); as differences) {
+          <section class="panel comparison-differences">
+            <div class="panel-heading">
+              <div>
+                <p class="eyebrow">COMPARACIÓN INTERNA</p>
+                <h2>Diferencias frente a «{{ differences[0].mortgage.scenarios[0].name }}»</h2>
+              </div>
+            </div>
+            <div class="table-scroll">
+              <table class="data-table comparison-table">
+                <thead>
+                  <tr>
+                    <th>Escenario</th>
+                    <th>Ahorro en intereses</th>
+                    <th>Ahorro en coste total</th>
+                    <th>Meses ahorrados</th>
+                    <th>Diferencia de cuota inicial</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  @for (item of differences; track trackScenarioResult($index, item)) {
+                    <tr>
+                      <td>
+                        <strong>{{ item.mortgage.name }} · {{ item.scenario.name }}</strong>
+                      </td>
+                      <td
+                        [class.positive-value]="item.interestSavings >= 0"
+                        [class.negative-value]="item.interestSavings < 0"
+                      >
+                        {{ currency(item.interestSavings) }}
+                      </td>
+                      <td
+                        [class.positive-value]="item.totalCostSavings >= 0"
+                        [class.negative-value]="item.totalCostSavings < 0"
+                      >
+                        {{ currency(item.totalCostSavings) }}
+                      </td>
+                      <td>{{ item.monthsSaved }}</td>
+                      <td>{{ currency(item.initialPaymentDifference) }}</td>
+                    </tr>
+                  }
+                </tbody>
+              </table>
+            </div>
+          </section>
+        }
+
         <div class="comparison-charts">
           <section class="panel chart-panel">
             <div class="panel-heading">

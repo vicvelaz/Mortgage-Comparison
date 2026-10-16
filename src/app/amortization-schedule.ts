@@ -8,9 +8,19 @@ import {
   ViewChild,
 } from '@angular/core';
 import type { Chart as ChartInstance } from 'chart.js';
-import { Chart } from 'chart.js';
-import { Mortgage, MortgageResult, Scenario } from './mortgage-calculator';
+import {
+  BarController,
+  BarElement,
+  CategoryScale,
+  Chart,
+  Legend,
+  LinearScale,
+  Tooltip,
+} from 'chart.js';
+import { AmortizationRow, Mortgage, MortgageResult, Scenario } from './mortgage-calculator';
 import { ChartViewportComponent } from './chart-viewport';
+
+Chart.register(BarController, BarElement, CategoryScale, Legend, LinearScale, Tooltip);
 
 const chartColors = ['#007f73', '#df765d', '#586b9c'];
 const amortizationColors = ['#007f73', '#df765d', '#586b9c', '#d3a347', '#9b6db0', '#5a9bb5'];
@@ -20,6 +30,41 @@ const currencyFormatter = new Intl.NumberFormat('es-ES', {
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
 });
+const percentageFormatter = new Intl.NumberFormat('es-ES', {
+  minimumFractionDigits: 1,
+  maximumFractionDigits: 1,
+});
+
+export type PaymentChartPeriod = 'annual' | 'monthly';
+
+export interface PaymentBreakdownPeriod {
+  label: string;
+  interest: number;
+  principal: number;
+  extraPayment: number;
+}
+
+export function aggregatePaymentBreakdown(
+  rows: readonly AmortizationRow[],
+  period: PaymentChartPeriod,
+): PaymentBreakdownPeriod[] {
+  const chunks =
+    period === 'monthly'
+      ? rows.map((row) => [row])
+      : Array.from({ length: Math.ceil(rows.length / 12) }, (_, year) =>
+          rows.slice(year * 12, year * 12 + 12),
+        );
+  return chunks.map((chunk, index) => ({
+    label: period === 'monthly' ? `${chunk[0].month}` : `Año ${index + 1}`,
+    interest: sumCents(chunk.map((row) => row.interest)),
+    principal: sumCents(chunk.map((row) => row.principal)),
+    extraPayment: sumCents(chunk.map((row) => row.extraPayment)),
+  }));
+}
+
+function sumCents(values: readonly number[]): number {
+  return values.reduce((total, value) => total + Math.round(value * 100), 0) / 100;
+}
 
 @Component({
   selector: 'app-amortization-schedule',
@@ -33,8 +78,11 @@ export class AmortizationScheduleComponent implements AfterViewInit, OnChanges, 
     result: MortgageResult;
   };
   @ViewChild('detailChart') private detailCanvas?: ElementRef<HTMLCanvasElement>;
+  @ViewChild('breakdownChart') private breakdownCanvas?: ElementRef<HTMLCanvasElement>;
 
   private chart: ChartInstance<'line'> | null = null;
+  private breakdownChart: ChartInstance<'bar'> | null = null;
+  chartPeriod: PaymentChartPeriod = 'annual';
 
   ngAfterViewInit(): void {
     this.renderChart();
@@ -46,10 +94,29 @@ export class AmortizationScheduleComponent implements AfterViewInit, OnChanges, 
 
   ngOnDestroy(): void {
     this.chart?.destroy();
+    this.breakdownChart?.destroy();
   }
 
   currency(value: number): string {
     return currencyFormatter.format(value);
+  }
+
+  paymentPercentage(value: number, payment: number): string {
+    return `${percentageFormatter.format(payment === 0 ? 0 : (value / payment) * 100)}%`;
+  }
+
+  paymentSummaryRows(): MortgageResult['rows'] {
+    const rows = this.detail.result.rows;
+    return rows.length > 1 ? [rows[0], rows[rows.length - 1]] : rows;
+  }
+
+  paymentSummaryLabel(month: number): string {
+    return month === 1 ? 'Mes 1' : `Último mes · ${month}`;
+  }
+
+  setChartPeriod(period: PaymentChartPeriod): void {
+    this.chartPeriod = period;
+    this.renderBreakdownChart();
   }
 
   amortizationColor(scenario: Scenario, id: string): string {
@@ -121,6 +188,63 @@ export class AmortizationScheduleComponent implements AfterViewInit, OnChanges, 
             position: 'right',
             beginAtZero: true,
             grid: { drawOnChartArea: false },
+            ticks: {
+              callback: (value) =>
+                new Intl.NumberFormat('es-ES', { notation: 'compact' }).format(Number(value)),
+            },
+          },
+        },
+      },
+    });
+    this.renderBreakdownChart();
+  }
+
+  private renderBreakdownChart(): void {
+    this.breakdownChart?.destroy();
+    this.breakdownChart = null;
+    if (!this.breakdownCanvas || !this.detail) return;
+
+    const periods = aggregatePaymentBreakdown(this.detail.result.rows, this.chartPeriod);
+    this.breakdownChart = new Chart(this.breakdownCanvas.nativeElement, {
+      type: 'bar',
+      data: {
+        labels: periods.map((item) => item.label),
+        datasets: [
+          {
+            label: 'Intereses',
+            data: periods.map((item) => item.interest),
+            backgroundColor: chartColors[1],
+            stack: 'payment',
+          },
+          {
+            label: 'Capital ordinario',
+            data: periods.map((item) => item.principal),
+            backgroundColor: chartColors[0],
+            stack: 'payment',
+          },
+          {
+            label: 'Amortización extra',
+            data: periods.map((item) => item.extraPayment),
+            backgroundColor: chartColors[2],
+            stack: 'payment',
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+          legend: { position: 'bottom', labels: { usePointStyle: true, boxWidth: 7 } },
+        },
+        scales: {
+          x: {
+            stacked: true,
+            grid: { display: false },
+            title: { display: true, text: this.chartPeriod === 'annual' ? 'Año' : 'Mes' },
+          },
+          y: {
+            stacked: true,
+            beginAtZero: true,
             ticks: {
               callback: (value) =>
                 new Intl.NumberFormat('es-ES', { notation: 'compact' }).format(Number(value)),

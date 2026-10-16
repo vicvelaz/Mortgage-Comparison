@@ -286,7 +286,6 @@ function calculateSchedule(
     if (monthAmortizations.length > 0) fixedPayment = nextPayment;
     else if (repricePayment) fixedPayment = scheduledPayment;
     previousMonthlyRate = monthlyRate;
-    const principal = scheduledPrincipal + extraPayment;
     remaining = Math.max(0, remaining);
     if (remaining < 1e-8) remaining = 0;
     if (remaining === 0 && monthlyBudgetApplied) {
@@ -295,14 +294,14 @@ function calculateSchedule(
     totalInterest += interest;
     bonusCost += cost;
     amortizationFees += fee;
-    cumulativePrincipal += principal;
+    cumulativePrincipal += scheduledPrincipal + extraPayment;
     cashFlows.push(interest + scheduledPrincipal + extraPayment + cost + fee);
 
     rows.push({
       month,
       payment: interest + scheduledPrincipal,
       interest,
-      principal,
+      principal: scheduledPrincipal,
       extraPayment,
       fee,
       amortizationEvents,

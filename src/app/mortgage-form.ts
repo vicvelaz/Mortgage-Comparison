@@ -2,7 +2,13 @@ import { DecimalPipe } from '@angular/common';
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatCheckboxModule } from '@angular/material/checkbox';
-import { Mortgage, MortgageResult, calculateMortgage, createId } from './mortgage-calculator';
+import {
+  Mortgage,
+  MortgageResult,
+  Scenario,
+  calculateMortgage,
+  createId,
+} from './mortgage-calculator';
 import { validateAmortization, validateBonus, validateMortgage } from './mortgage-validation';
 
 const currencyFormatter = new Intl.NumberFormat('es-ES', {
@@ -20,6 +26,7 @@ const amortizationColors = ['#007f73', '#df765d', '#586b9c', '#d3a347', '#9b6db0
 })
 export class MortgageFormComponent {
   @Input({ required: true }) draft!: Mortgage;
+  @Input({ required: true }) scenario!: Scenario;
   @Input() editingId: string | null = null;
   @Output() saveRequested = new EventEmitter<void>();
   @Output() notify = new EventEmitter<string>();
@@ -50,25 +57,27 @@ export class MortgageFormComponent {
     return type === 'fixed' ? 'Fija' : 'Variable';
   }
 
-  amortizationColor(mortgage: Mortgage, id: string): string {
-    const index = mortgage.amortizations.findIndex((item) => item.id === id);
+  amortizationColor(scenario: Scenario, id: string): string {
+    const index = scenario.amortizations.findIndex((item) => item.id === id);
     return amortizationColors[(index < 0 ? 0 : index) % amortizationColors.length];
   }
 
   /** Resultado del borrador; null mientras el borrador no es válido. */
   get draftResult(): MortgageResult | null {
-    const snapshot = JSON.stringify(this.draft);
+    const snapshot = JSON.stringify([this.draft, this.scenario]);
     if (this.draftCache?.snapshot !== snapshot) {
       this.draftCache = {
         snapshot,
-        result: validateMortgage(this.draft) ? null : calculateMortgage(this.draft),
+        result: validateMortgage(this.draft) ? null : calculateMortgage(this.draft, this.scenario),
       };
     }
     return this.draftCache.result;
   }
 
   draftAmortizationInterestSavings(id: string): number | null {
-    return this.draftResult?.amortizationInterestSavings.find((item) => item.id === id)?.savings ?? null;
+    return (
+      this.draftResult?.amortizationInterestSavings.find((item) => item.id === id)?.savings ?? null
+    );
   }
 
   addBonus(): void {
@@ -85,8 +94,8 @@ export class MortgageFormComponent {
       this.notify.emit(error);
       return;
     }
-    this.draft.bonuses = [
-      ...this.draft.bonuses,
+    this.scenario.bonuses = [
+      ...this.scenario.bonuses,
       {
         id: createId(),
         name: bonus.name.trim(),
@@ -107,7 +116,7 @@ export class MortgageFormComponent {
   }
 
   removeBonus(id: string): void {
-    this.draft.bonuses = this.draft.bonuses.filter((bonus) => bonus.id !== id);
+    this.scenario.bonuses = this.scenario.bonuses.filter((bonus) => bonus.id !== id);
   }
 
   addAmortization(): void {
@@ -117,11 +126,11 @@ export class MortgageFormComponent {
       this.notify.emit(error);
       return;
     }
-    this.draft.amortizations = [
-      ...this.draft.amortizations,
+    this.scenario.amortizations = [
+      ...this.scenario.amortizations,
       {
         id: createId(),
-        name: item.name.trim() || `Amortización ${this.draft.amortizations.length + 1}`,
+        name: item.name.trim() || `Amortización ${this.scenario.amortizations.length + 1}`,
         active: true,
         type: item.type,
         reductionType: item.reductionType,
@@ -139,6 +148,6 @@ export class MortgageFormComponent {
   }
 
   removeAmortization(id: string): void {
-    this.draft.amortizations = this.draft.amortizations.filter((item) => item.id !== id);
+    this.scenario.amortizations = this.scenario.amortizations.filter((item) => item.id !== id);
   }
 }

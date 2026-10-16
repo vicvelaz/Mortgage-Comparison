@@ -80,9 +80,9 @@
               <span>MENOR TOTAL PAGADO</span><span class="kpi-index">02</span>
             </div>
             <div class="kpi-value kpi-money">
-              {{ cheapest() ? currency(calculateMortgageFor(cheapest()!.id).totalCost) : '—' }}
+              {{ cheapest() ? currency(cheapest()!.result.totalCost) : '—' }}
             </div>
-            <p>{{ cheapest()?.name ?? 'Añade una oferta para empezar' }}</p>
+            <p>{{ resultLabel(cheapest()) }}</p>
             <small class="kpi-note"
               >Entre todas tus ofertas. Solo comparable con el mismo capital y plazo.</small
             >
@@ -90,24 +90,16 @@
           <article class="kpi-card">
             <div class="kpi-top"><span>CUOTA MÁS BAJA</span><span class="kpi-index">03</span></div>
             <div class="kpi-value kpi-money">
-              {{
-                smallestPayment()
-                  ? currency(calculateMortgageFor(smallestPayment()!.id).firstPayment)
-                  : '—'
-              }}
+              {{ smallestPayment() ? currency(smallestPayment()!.result.firstPayment) : '—' }}
             </div>
-            <p>{{ smallestPayment()?.name ?? 'Sin ofertas todavía' }}</p>
+            <p>{{ resultLabel(smallestPayment()) }}</p>
           </article>
           <article class="kpi-card">
             <div class="kpi-top"><span>MENOS INTERESES</span><span class="kpi-index">04</span></div>
             <div class="kpi-value kpi-money">
-              {{
-                leastInterest()
-                  ? currency(calculateMortgageFor(leastInterest()!.id).totalInterest)
-                  : '—'
-              }}
+              {{ leastInterest() ? currency(leastInterest()!.result.totalInterest) : '—' }}
             </div>
-            <p>{{ leastInterest()?.name ?? 'Sin ofertas todavía' }}</p>
+            <p>{{ resultLabel(leastInterest()) }}</p>
           </article>
         </div>
 
@@ -121,7 +113,10 @@
               <a routerLink="/comparison" class="text-link">Comparar ofertas <span>↗</span></a>
             </div>
             <p class="panel-subtitle">Evolución del saldo según las ofertas seleccionadas abajo.</p>
-            <app-chart-viewport class="chart-frame" label="Evolución comparativa del capital pendiente">
+            <app-chart-viewport
+              class="chart-frame"
+              label="Evolución comparativa del capital pendiente"
+            >
               <canvas
                 #overviewChart
                 aria-label="Evolución comparativa del capital pendiente"
@@ -138,11 +133,18 @@
               <a routerLink="/mortgages" class="text-link">Ver todas <span>↗</span></a>
             </div>
             <div class="recent-list">
-              @for (item of mortgageResults().slice(0, 4); track item.mortgage.id) {
-                <button type="button" class="recent-row" (click)="editMortgage(item.mortgage)">
+              @for (
+                item of mortgageResults().slice(0, 4);
+                track trackScenarioResult($index, item)
+              ) {
+                <button
+                  type="button"
+                  class="recent-row"
+                  (click)="editMortgage(item.mortgage, item.scenario.id)"
+                >
                   <span class="offer-avatar">{{ item.mortgage.bank.slice(0, 1) }}</span>
                   <span class="recent-info"
-                    ><strong>{{ item.mortgage.name }}</strong
+                    ><strong>{{ item.mortgage.name }} · {{ item.scenario.name }}</strong
                     ><small>{{ item.mortgage.bank }} · {{ item.mortgage.years }} años</small></span
                   >
                   <span class="recent-amount"
@@ -174,18 +176,18 @@
             <span class="selection-count">{{ selectedResults().length }} seleccionadas</span>
           </div>
           <div class="selection-list">
-            @for (item of mortgageResults(); track item.mortgage.id) {
+            @for (item of mortgageResults(); track trackScenarioResult($index, item)) {
               <div class="selection-row">
                 <mat-checkbox
-                  [checked]="isSelected(item.mortgage.id)"
-                  (change)="toggleComparison(item.mortgage.id, $event.checked)"
+                  [checked]="isSelected(item.mortgage.id, item.scenario.id)"
+                  (change)="toggleComparison(item.mortgage.id, item.scenario.id, $event.checked)"
                 ></mat-checkbox>
                 <span
                   class="color-marker"
-                  [style.background]="markerColor(item.mortgage.id)"
+                  [style.background]="markerColor(item.mortgage.id, item.scenario.id)"
                 ></span>
                 <span class="selection-name"
-                  ><strong>{{ item.mortgage.name }}</strong
+                  ><strong>{{ item.mortgage.name }} · {{ item.scenario.name }}</strong
                   ><small>{{ item.mortgage.bank }}</small></span
                 >
                 <span class="selection-rate"
@@ -194,7 +196,11 @@
                 <span class="selection-payment"
                   >{{ currency(item.result.firstPayment) }}<small>/ mes</small></span
                 >
-                <button class="link-button" type="button" (click)="editMortgage(item.mortgage)">
+                <button
+                  class="link-button"
+                  type="button"
+                  (click)="editMortgage(item.mortgage, item.scenario.id)"
+                >
                   Editar
                 </button>
               </div>
@@ -219,9 +225,60 @@
           </button>
         </div>
 
+        <section class="panel scenario-controls">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">VARIANTES DE LA HIPOTECA</p>
+              <h2>Escenarios</h2>
+            </div>
+            <div class="scenario-actions">
+              <button class="button button-outline" type="button" (click)="createScenario()">
+                Nuevo
+              </button>
+              <button
+                class="button button-outline"
+                type="button"
+                (click)="duplicateScenario()"
+                [disabled]="!activeScenario()"
+              >
+                Duplicar
+              </button>
+              <button
+                class="button button-outline"
+                type="button"
+                (click)="renameScenario()"
+                [disabled]="!activeScenario()"
+              >
+                Renombrar
+              </button>
+              <button
+                class="button button-outline danger-link"
+                type="button"
+                (click)="deleteScenario()"
+                [disabled]="draft.scenarios.length <= 1"
+              >
+                Eliminar
+              </button>
+            </div>
+          </div>
+          <label class="field scenario-selector">
+            <span>Escenario en edición</span>
+            <select
+              aria-label="Seleccionar escenario"
+              [value]="selectedScenarioId()"
+              (change)="selectScenario($event)"
+            >
+              @for (scenario of draft.scenarios; track scenario.id) {
+                <option [value]="scenario.id">{{ scenario.name }}</option>
+              }
+            </select>
+          </label>
+        </section>
+
         <div class="editor-layout">
           <app-mortgage-form
             [draft]="draft"
+            [scenario]="activeScenario()!"
             [editingId]="editingId()"
             (saveRequested)="saveMortgage()"
             (notify)="status.set($event)"
@@ -235,12 +292,21 @@
               </div>
               <span class="selection-count">{{ mortgages().length }}</span>
             </div>
-            @for (item of mortgageResults(); track item.mortgage.id) {
-              <article class="offer-card" [class.offer-active]="editingId() === item.mortgage.id">
-                <button class="offer-card-main" type="button" (click)="editMortgage(item.mortgage)">
+            @for (item of mortgageResults(); track trackScenarioResult($index, item)) {
+              <article
+                class="offer-card"
+                [class.offer-active]="
+                  editingId() === item.mortgage.id && selectedScenarioId() === item.scenario.id
+                "
+              >
+                <button
+                  class="offer-card-main"
+                  type="button"
+                  (click)="editMortgage(item.mortgage, item.scenario.id)"
+                >
                   <span class="offer-avatar">{{ item.mortgage.bank.slice(0, 1) }}</span>
                   <span class="recent-info"
-                    ><strong>{{ item.mortgage.name }}</strong
+                    ><strong>{{ item.mortgage.name }} · {{ item.scenario.name }}</strong
                     ><small>{{ item.mortgage.bank }}</small></span
                   >
                 </button>
@@ -289,18 +355,18 @@
             <span class="selection-count">{{ selectedResults().length }} seleccionadas</span>
           </div>
           <div class="picker-list">
-            @for (item of mortgageResults(); track item.mortgage.id) {
+            @for (item of mortgageResults(); track trackScenarioResult($index, item)) {
               <div class="picker-item">
                 <mat-checkbox
-                  [checked]="isSelected(item.mortgage.id)"
-                  (change)="toggleComparison(item.mortgage.id, $event.checked)"
+                  [checked]="isSelected(item.mortgage.id, item.scenario.id)"
+                  (change)="toggleComparison(item.mortgage.id, item.scenario.id, $event.checked)"
                 ></mat-checkbox
                 ><span
                   class="color-marker"
-                  [style.background]="markerColor(item.mortgage.id)"
+                  [style.background]="markerColor(item.mortgage.id, item.scenario.id)"
                 ></span
                 ><span class="selection-name"
-                  ><strong>{{ item.mortgage.name }}</strong
+                  ><strong>{{ item.mortgage.name }} · {{ item.scenario.name }}</strong
                   ><small>{{ item.mortgage.bank }}</small></span
                 ><span class="picker-amount">{{ currency(item.mortgage.amount) }}</span>
               </div>
@@ -332,8 +398,8 @@
               selectedLowest('totalCost')
                 ? currency(selectedLowest('totalCost')!.result.totalCost)
                 : '—'
-            }}</strong
-            ><small>{{ selectedLowest('totalCost')?.mortgage.name ?? 'Selecciona ofertas' }}</small>
+            }}</strong>
+            <small>{{ resultLabel(selectedLowest('totalCost')) }}</small>
           </article>
           <article class="comparison-metric">
             <span>CUOTA INICIAL MÁS BAJA</span
@@ -342,9 +408,7 @@
                 ? currency(selectedLowest('firstPayment')!.result.firstPayment)
                 : '—'
             }}</strong
-            ><small>{{
-              selectedLowest('firstPayment')?.mortgage.name ?? 'Selecciona ofertas'
-            }}</small>
+            ><small>{{ resultLabel(selectedLowest('firstPayment')) }}</small>
           </article>
           <article class="comparison-metric">
             <span>MENOS INTERESES</span
@@ -353,9 +417,7 @@
                 ? currency(selectedLowest('totalInterest')!.result.totalInterest)
                 : '—'
             }}</strong
-            ><small>{{
-              selectedLowest('totalInterest')?.mortgage.name ?? 'Selecciona ofertas'
-            }}</small>
+            ><small>{{ resultLabel(selectedLowest('totalInterest')) }}</small>
           </article>
           <article class="comparison-metric">
             <span>COSTE DE BONIFICACIONES</span><strong>{{ currency(totalBonuses()) }}</strong
@@ -370,8 +432,8 @@
             <span>MEJOR COSTE POR 100 €</span
             ><strong>{{
               lowestRelativeCost() ? currency(lowestRelativeCost()!.relativeCost) : '—'
-            }}</strong
-            ><small>{{ lowestRelativeCost()?.mortgage.name ?? 'Selecciona ofertas' }}</small>
+            }}</strong>
+            <small>{{ resultLabel(lowestRelativeCost()) }}</small>
           </article>
         </div>
 
@@ -430,10 +492,10 @@
                 </tr>
               </thead>
               <tbody>
-                @for (item of selectedResults(); track item.mortgage.id) {
+                @for (item of selectedResults(); track trackScenarioResult($index, item)) {
                   <tr>
                     <td>
-                      <strong>{{ item.mortgage.name }}</strong
+                      <strong>{{ item.mortgage.name }} · {{ item.scenario.name }}</strong
                       ><small>{{ item.mortgage.bank }}</small>
                     </td>
                     <td>{{ rateTypeLabel(item.mortgage.rateType) }}</td>
@@ -462,8 +524,9 @@
           </p>
           <p class="method-note">
             Total pagado = capital devuelto + intereses + bonificaciones. Ahorro en intereses: solo
-            intereses evitados por las amortizaciones. TAE aprox.: orientativa, incluye bonificaciones
-            y no sustituye a la FEE. Coste por 100 € = (intereses + bonificaciones) / capital × 100.
+            intereses evitados por las amortizaciones. TAE aprox.: orientativa, incluye
+            bonificaciones y no sustituye a la FEE. Coste por 100 € = (intereses + bonificaciones) /
+            capital × 100.
           </p>
         </section>
       </section>

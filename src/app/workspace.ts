@@ -28,6 +28,7 @@ import { filter } from 'rxjs';
 import {
   Mortgage,
   MortgageResult,
+  Scenario,
   calculateMortgage,
   createId,
   relativeCostPer100,
@@ -65,6 +66,12 @@ Chart.register(
 type ViewName = 'dashboard' | 'mortgages' | 'comparison';
 type ResultKey = 'totalCost' | 'firstPayment' | 'totalInterest';
 
+interface ScenarioResult {
+  mortgage: Mortgage;
+  scenario: Scenario;
+  result: MortgageResult;
+}
+
 function emptyMortgage(): Mortgage {
   return {
     id: createId(),
@@ -74,10 +81,13 @@ function emptyMortgage(): Mortgage {
     years: 25,
     interestRate: 3.1,
     rateType: 'fixed',
-    bonuses: [],
-    amortizations: [],
+    scenarios: [{ id: createId(), name: 'Base', bonuses: [], amortizations: [] }],
     updatedAt: new Date().toISOString(),
   };
+}
+
+function scenarioKey(mortgageId: string, scenarioId: string): string {
+  return JSON.stringify([mortgageId, scenarioId]);
 }
 
 @Component({
@@ -103,19 +113,34 @@ export class Workspace implements AfterViewInit, OnDestroy {
   readonly selectedIds = signal(
     this.mortgages()
       .slice(0, 2)
-      .map((mortgage) => mortgage.id),
+      .flatMap((mortgage) =>
+        mortgage.scenarios.slice(0, 1).map((scenario) => scenarioKey(mortgage.id, scenario.id)),
+      ),
   );
+  readonly selectedScenarioId = signal(this.mortgages()[0]?.scenarios[0]?.id ?? '');
   readonly status = signal(
     this.initialLoad.notice ?? 'Tus datos se guardan automáticamente en este dispositivo.',
   );
   readonly mortgageResults = computed(() =>
-    this.mortgages().map((mortgage) => ({ mortgage, result: calculateMortgage(mortgage) })),
+    this.mortgages().flatMap((mortgage) =>
+      mortgage.scenarios.map((scenario) => ({
+        mortgage,
+        scenario,
+        result: calculateMortgage(mortgage, scenario),
+      })),
+    ),
   );
   readonly selectedResults = computed(() =>
-    this.mortgageResults().filter(({ mortgage }) => this.selectedIds().includes(mortgage.id)),
+    this.mortgageResults().filter(({ mortgage, scenario }) =>
+      this.selectedIds().includes(scenarioKey(mortgage.id, scenario.id)),
+    ),
   );
   readonly editingResult = computed(
-    () => this.mortgageResults().find(({ mortgage }) => mortgage.id === this.editingId()) ?? null,
+    () =>
+      this.mortgageResults().find(
+        ({ mortgage, scenario }) =>
+          mortgage.id === this.editingId() && scenario.id === this.selectedScenarioId(),
+      ) ?? null,
   );
   readonly cheapest = computed(() => this.lowest('totalCost'));
   readonly smallestPayment = computed(() => this.lowest('firstPayment'));
@@ -130,10 +155,11 @@ export class Workspace implements AfterViewInit, OnDestroy {
       )
     );
   });
-  readonly lowestRelativeCost = computed(() =>
-    this.selectedResults()
-      .map((item) => ({ ...item, relativeCost: this.relativeCost(item) }))
-      .sort((left, right) => left.relativeCost - right.relativeCost)[0] ?? null,
+  readonly lowestRelativeCost = computed(
+    () =>
+      this.selectedResults()
+        .map((item) => ({ ...item, relativeCost: this.relativeCost(item) }))
+        .sort((left, right) => left.relativeCost - right.relativeCost)[0] ?? null,
   );
   readonly totalBonuses = computed(() =>
     this.selectedResults().reduce((total, item) => total + item.result.bonusCost, 0),
@@ -184,13 +210,19 @@ export class Workspace implements AfterViewInit, OnDestroy {
 
   openNewMortgage(): void {
     this.draft = emptyMortgage();
+    this.selectedScenarioId.set(this.draft.scenarios[0].id);
     this.editingId.set(null);
     this.setView('mortgages');
     this.refreshCharts();
   }
 
-  editMortgage(mortgage: Mortgage): void {
+  editMortgage(mortgage: Mortgage, scenarioId?: string): void {
     this.draft = structuredClone(mortgage);
+    this.selectedScenarioId.set(
+      this.draft.scenarios.find((scenario) => scenario.id === scenarioId)?.id ??
+        this.draft.scenarios[0]?.id ??
+        '',
+    );
     this.editingId.set(mortgage.id);
     this.setView('mortgages');
     this.refreshCharts();
@@ -220,52 +252,126 @@ export class Workspace implements AfterViewInit, OnDestroy {
     this.commitChanges();
   }
 
+  activeScenario(): Scenario | null {
+    return (
+      this.draft.scenarios.find((scenario) => scenario.id === this.selectedScenarioId()) ??
+      this.draft.scenarios[0] ??
+      null
+    );
+  }
+
+  selectScenario(event: Event): void {
+    const id = (event.currentTarget as HTMLSelectElement).value;
+    if (this.draft.scenarios.some((scenario) => scenario.id === id)) {
+      this.selectedScenarioId.set(id);
+    }
+  }
+
+  createScenario(): void {
+    const scenario: Scenario = {
+      id: createId(),
+      name: `Escenario ${this.draft.scenarios.length + 1}`,
+      bonuses: [],
+      amortizations: [],
+    };
+    this.draft.scenarios = [...this.draft.scenarios, scenario];
+    this.selectedScenarioId.set(scenario.id);
+  }
+
+  duplicateScenario(): void {
+    const selected = this.activeScenario();
+    if (!selected) return;
+    const copy: Scenario = {
+      ...structuredClone(selected),
+      id: createId(),
+      name: `${selected.name} (copia)`,
+      bonuses: selected.bonuses.map((bonus) => ({ ...structuredClone(bonus), id: createId() })),
+      amortizations: selected.amortizations.map((item) => ({
+        ...structuredClone(item),
+        id: createId(),
+      })),
+    };
+    this.draft.scenarios = [...this.draft.scenarios, copy];
+    this.selectedScenarioId.set(copy.id);
+  }
+
+  renameScenario(): void {
+    const selected = this.activeScenario();
+    if (!selected) return;
+    const name = prompt('Nombre del escenario', selected.name);
+    if (name === null) return;
+    const trimmed = name.trim();
+    if (!trimmed) {
+      this.status.set('El nombre del escenario no puede estar vacío.');
+      return;
+    }
+    this.draft.scenarios = this.draft.scenarios.map((scenario) =>
+      scenario.id === selected.id ? { ...scenario, name: trimmed } : scenario,
+    );
+  }
+
+  deleteScenario(): void {
+    const selected = this.activeScenario();
+    if (!selected) return;
+    if (this.draft.scenarios.length <= 1) {
+      this.status.set('La hipoteca debe tener al menos un escenario.');
+      return;
+    }
+    if (!confirm(`¿Eliminar el escenario “${selected.name}”?`)) return;
+    this.draft.scenarios = this.draft.scenarios.filter((scenario) => scenario.id !== selected.id);
+    this.selectedScenarioId.set(this.draft.scenarios[0].id);
+  }
+
   deleteMortgage(mortgage: Mortgage): void {
     if (!confirm(`¿Eliminar la oferta “${mortgage.name}”?`)) return;
     this.mortgages.set(this.mortgages().filter((item) => item.id !== mortgage.id));
-    this.selectedIds.update((ids) => ids.filter((id) => id !== mortgage.id));
+    const removedKeys = new Set(
+      mortgage.scenarios.map((scenario) => scenarioKey(mortgage.id, scenario.id)),
+    );
+    this.selectedIds.update((ids) => ids.filter((id) => !removedKeys.has(id)));
     if (this.editingId() === mortgage.id) {
       this.editingId.set(null);
       this.draft = emptyMortgage();
+      this.selectedScenarioId.set(this.draft.scenarios[0].id);
     }
     this.status.set('Oferta eliminada.');
     this.commitChanges();
   }
 
-  toggleComparison(id: string, checked: boolean): void {
+  toggleComparison(mortgageId: string, scenarioId: string, checked: boolean): void {
+    const id = scenarioKey(mortgageId, scenarioId);
     this.selectedIds.update((ids) =>
       checked ? [...new Set([...ids, id])] : ids.filter((item) => item !== id),
     );
     this.refreshCharts();
   }
 
-  isSelected(id: string): boolean {
-    return this.selectedIds().includes(id);
+  isSelected(mortgageId: string, scenarioId: string): boolean {
+    return this.selectedIds().includes(scenarioKey(mortgageId, scenarioId));
   }
 
   currency(value: number): string {
     return currencyFormatter.format(value);
   }
 
-  calculateMortgageFor(id: string): MortgageResult {
-    return this.mortgageResults().find((item) => item.mortgage.id === id)!.result;
-  }
-
-  selectedLowest(key: ResultKey): { mortgage: Mortgage; result: MortgageResult } | null {
+  selectedLowest(key: ResultKey): ScenarioResult | null {
     return (
       [...this.selectedResults()].sort((left, right) => left.result[key] - right.result[key])[0] ??
       null
     );
   }
 
-  markerColor(id: string): string {
-    const selectedIndex = this.selectedIds().indexOf(id);
-    const mortgageIndex = this.mortgages().findIndex((mortgage) => mortgage.id === id);
+  markerColor(mortgageId: string, scenarioId: string): string {
+    const key = scenarioKey(mortgageId, scenarioId);
+    const selectedIndex = this.selectedIds().indexOf(key);
+    const mortgageIndex = this.mortgageResults().findIndex(
+      (item) => scenarioKey(item.mortgage.id, item.scenario.id) === key,
+    );
     return chartColors[(selectedIndex >= 0 ? selectedIndex : mortgageIndex) % chartColors.length];
   }
 
-  amortizationColor(mortgage: Mortgage, id: string): string {
-    const index = mortgage.amortizations.findIndex((item) => item.id === id);
+  amortizationColor(scenario: Scenario, id: string): string {
+    const index = scenario.amortizations.findIndex((item) => item.id === id);
     return amortizationColors[(index < 0 ? 0 : index) % amortizationColors.length];
   }
 
@@ -273,8 +379,12 @@ export class Workspace implements AfterViewInit, OnDestroy {
     return type === 'fixed' ? 'Fija' : 'Variable';
   }
 
-  relativeCost(item: { mortgage: Mortgage; result: MortgageResult }): number {
+  relativeCost(item: ScenarioResult): number {
     return relativeCostPer100(item.mortgage, item.result);
+  }
+
+  resultLabel(item: ScenarioResult | null | undefined): string {
+    return item ? `${item.mortgage.name} · ${item.scenario.name}` : 'Selecciona ofertas';
   }
 
   exportData(): void {
@@ -302,9 +412,16 @@ export class Workspace implements AfterViewInit, OnDestroy {
       }
       const mortgages = result.value;
       this.mortgages.set(mortgages);
-      this.selectedIds.set(mortgages.slice(0, 2).map((mortgage) => mortgage.id));
+      this.selectedIds.set(
+        mortgages
+          .slice(0, 2)
+          .flatMap((mortgage) =>
+            mortgage.scenarios.slice(0, 1).map((scenario) => scenarioKey(mortgage.id, scenario.id)),
+          ),
+      );
       this.editingId.set(null);
       this.draft = emptyMortgage();
+      this.selectedScenarioId.set(this.draft.scenarios[0].id);
       this.status.set('Importación completada.');
       this.commitChanges();
     } catch {
@@ -314,8 +431,8 @@ export class Workspace implements AfterViewInit, OnDestroy {
     }
   }
 
-  trackMortgage(_index: number, mortgage: Mortgage): string {
-    return mortgage.id;
+  trackScenarioResult(_index: number, item: ScenarioResult): string {
+    return scenarioKey(item.mortgage.id, item.scenario.id);
   }
 
   private viewFromUrl(): ViewName {
@@ -323,10 +440,10 @@ export class Workspace implements AfterViewInit, OnDestroy {
     return segment === 'mortgages' || segment === 'comparison' ? segment : 'dashboard';
   }
 
-  private lowest(key: ResultKey): Mortgage | null {
+  private lowest(key: ResultKey): ScenarioResult | null {
     return (
-      [...this.mortgageResults()].sort((left, right) => left.result[key] - right.result[key])[0]
-        ?.mortgage ?? null
+      [...this.mortgageResults()].sort((left, right) => left.result[key] - right.result[key])[0] ??
+      null
     );
   }
 
@@ -348,13 +465,12 @@ export class Workspace implements AfterViewInit, OnDestroy {
   private renderCharts(): void {
     const rows = this.selectedResults();
     const longest = rows.reduce<MortgageResult | null>(
-      (best, item) =>
-        !best || item.result.rows.length > best.rows.length ? item.result : best,
+      (best, item) => (!best || item.result.rows.length > best.rows.length ? item.result : best),
       null,
     );
     const labels = longest?.rows.map((row) => row.month) ?? [];
     const lineData = rows.map((item, index) => ({
-      label: item.mortgage.name,
+      label: `${item.mortgage.name} · ${item.scenario.name}`,
       data: item.result.rows.map((row) => row.remainingCapital),
       borderColor: chartColors[index % chartColors.length],
       backgroundColor: chartColors[index % chartColors.length],
@@ -406,7 +522,7 @@ export class Workspace implements AfterViewInit, OnDestroy {
         data: {
           labels: ['Coste total', 'Intereses', 'Bonificaciones'],
           datasets: rows.map((item, index) => ({
-            label: item.mortgage.name,
+            label: `${item.mortgage.name} · ${item.scenario.name}`,
             data: [item.result.totalCost, item.result.totalInterest, item.result.bonusCost],
             backgroundColor: chartColors[index % chartColors.length],
             borderRadius: 3,

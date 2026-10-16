@@ -1,5 +1,12 @@
-import { Mortgage } from './mortgage-calculator';
-import { STORAGE_KEY, loadMortgages, parseMortgageFile, serializeMortgages } from './mortgage-storage';
+import { Mortgage, calculateMortgage } from './mortgage-calculator';
+import {
+  LEGACY_BACKUP_KEY,
+  LEGACY_STORAGE_KEY,
+  STORAGE_KEY,
+  loadMortgages,
+  parseMortgageFile,
+  serializeMortgages,
+} from './mortgage-storage';
 
 const base: Mortgage = {
   id: 'oferta-1',
@@ -10,15 +17,60 @@ const base: Mortgage = {
   interestRate: 3.1,
   rateType: 'fixed',
   startDate: '2026-01-01',
-  bonuses: [
-    { id: 'b1', name: 'Nómina', active: true, interestReduction: 0.5, annualCost: 120, startMonth: 1, endMonth: 120 },
-    { id: 'b2', name: 'Seguro hogar', active: false, interestReduction: 0.2, annualCost: 0 },
-  ],
-  amortizations: [
-    { id: 'a1', name: 'Extra', active: true, type: 'single', reductionType: 'term', amount: 5000, month: 24 },
-    { id: 'a2', name: 'Anual', active: true, type: 'recurring', reductionType: 'payment', amount: 1000, month: 12, frequencyMonths: 12 },
+  scenarios: [
+    {
+      id: 'scenario-1',
+      name: 'Base',
+      bonuses: [
+        {
+          id: 'b1',
+          name: 'Nómina',
+          active: true,
+          interestReduction: 0.5,
+          annualCost: 120,
+          startMonth: 1,
+          endMonth: 120,
+        },
+        { id: 'b2', name: 'Seguro hogar', active: false, interestReduction: 0.2, annualCost: 0 },
+      ],
+      amortizations: [
+        {
+          id: 'a1',
+          name: 'Extra',
+          active: true,
+          type: 'single',
+          reductionType: 'term',
+          amount: 5000,
+          month: 24,
+        },
+        {
+          id: 'a2',
+          name: 'Anual',
+          active: true,
+          type: 'recurring',
+          reductionType: 'payment',
+          amount: 1000,
+          month: 12,
+          frequencyMonths: 12,
+        },
+      ],
+    },
   ],
   updatedAt: '2026-02-01T10:00:00.000Z',
+};
+
+const legacyBase = {
+  id: base.id,
+  name: base.name,
+  bank: base.bank,
+  amount: base.amount,
+  years: base.years,
+  interestRate: base.interestRate,
+  rateType: base.rateType,
+  startDate: base.startDate,
+  bonuses: base.scenarios[0].bonuses,
+  amortizations: base.scenarios[0].amortizations,
+  updatedAt: base.updatedAt,
 };
 
 function fakeStorage(initial: Record<string, string> = {}) {
@@ -40,9 +92,33 @@ describe('mortgage-storage: ida y vuelta de exportación (F5)', () => {
   });
 
   it('reimporta ofertas con bonificaciones de fin y amortizaciones recurrentes', () => {
-    const offers = [base, { ...base, id: 'oferta-2', name: 'Variable', rateType: 'variable' as const }];
+    const offers = [
+      base,
+      { ...base, id: 'oferta-2', name: 'Variable', rateType: 'variable' as const },
+    ];
 
     expect(parseMortgageFile(serializeMortgages(offers))).toEqual({ ok: true, value: offers });
+  });
+
+  it('importa un archivo v1 y lo convierte a un escenario Base', () => {
+    const result = parseMortgageFile(JSON.stringify({ mortgages: [legacyBase] }));
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.value[0].scenarios).toHaveLength(1);
+      expect(result.value[0].scenarios[0]).toMatchObject({
+        name: 'Base',
+        bonuses: legacyBase.bonuses,
+        amortizations: legacyBase.amortizations,
+      });
+    }
+  });
+
+  it('siempre exporta la versión 2', () => {
+    expect(JSON.parse(serializeMortgages([base]))).toMatchObject({
+      schemaVersion: 2,
+      mortgages: [base],
+    });
   });
 
   it('distingue un JSON mal formado de una oferta inválida', () => {
@@ -56,7 +132,12 @@ describe('mortgage-storage: ida y vuelta de exportación (F5)', () => {
     const broken = {
       ...base,
       name: 'Mi oferta',
-      bonuses: [{ ...base.bonuses[0], startMonth: 50, endMonth: 10 }],
+      scenarios: [
+        {
+          ...base.scenarios[0],
+          bonuses: [{ ...base.scenarios[0].bonuses[0], startMonth: 50, endMonth: 10 }],
+        },
+      ],
     };
     const result = parseMortgageFile(serializeMortgages([broken]));
 
@@ -87,7 +168,10 @@ describe('mortgage-storage: carga desde localStorage (F6)', () => {
 
   it('carga las ofertas válidas, descarta la corrupta y guarda una copia de seguridad', () => {
     const corrupt = { ...base, id: 'oferta-3', amount: 'abc' };
-    const raw = JSON.stringify({ mortgages: [base, { ...base, id: 'oferta-2' }, corrupt] });
+    const raw = JSON.stringify({
+      schemaVersion: 2,
+      mortgages: [base, { ...base, id: 'oferta-2' }, corrupt],
+    });
     const storage = fakeStorage({ [STORAGE_KEY]: raw });
 
     const loaded = loadMortgages(storage, now);
@@ -104,8 +188,11 @@ describe('mortgage-storage: carga desde localStorage (F6)', () => {
     const loaded = loadMortgages(storage, now);
 
     expect(loaded.mortgages).toEqual([]);
-    expect(loaded.notice).toBe('No se pudo leer los datos guardados. Se guardó una copia de seguridad.');
+    expect(loaded.notice).toBe(
+      'No se pudo leer los datos guardados. Se guardó una copia de seguridad.',
+    );
     expect(storage.data.get(backupKey)).toBe(raw);
+    expect(storage.data.get(STORAGE_KEY)).toBe(raw);
   });
 
   it('no crea copia de seguridad si todas las ofertas son válidas', () => {
@@ -120,5 +207,37 @@ describe('mortgage-storage: carga desde localStorage (F6)', () => {
 
   it('devuelve una lista vacía sin avisos cuando no hay datos guardados', () => {
     expect(loadMortgages(fakeStorage(), now)).toEqual({ mortgages: [], notice: null });
+  });
+
+  it('migra automáticamente v1, crea la copia requerida y conserva la clave original', () => {
+    const raw = JSON.stringify({ mortgages: [legacyBase] });
+    const storage = fakeStorage({ [LEGACY_STORAGE_KEY]: raw });
+
+    const loaded = loadMortgages(storage, now);
+
+    expect(loaded.mortgages[0].scenarios[0]).toMatchObject({
+      name: 'Base',
+      bonuses: legacyBase.bonuses,
+      amortizations: legacyBase.amortizations,
+    });
+    expect(JSON.parse(storage.data.get(STORAGE_KEY)!)).toMatchObject({ schemaVersion: 2 });
+    expect(storage.data.get(LEGACY_BACKUP_KEY)).toBe(raw);
+    expect(storage.data.get(LEGACY_STORAGE_KEY)).toBe(raw);
+    expect(calculateMortgage(base, base.scenarios[0])).toEqual(
+      calculateMortgage(loaded.mortgages[0], loaded.mortgages[0].scenarios[0]),
+    );
+  });
+
+  it('no migra v1 cuando ya existe una clave v2', () => {
+    const rawV1 = JSON.stringify({ mortgages: [legacyBase] });
+    const storage = fakeStorage({
+      [LEGACY_STORAGE_KEY]: rawV1,
+      [STORAGE_KEY]: serializeMortgages([base]),
+    });
+
+    const loaded = loadMortgages(storage, now);
+
+    expect(loaded.mortgages).toEqual([base]);
+    expect(storage.data.has(LEGACY_BACKUP_KEY)).toBe(false);
   });
 });

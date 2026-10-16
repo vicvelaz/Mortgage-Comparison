@@ -21,6 +21,11 @@ export interface MortgageFields {
   amount: unknown;
   years: unknown;
   interestRate: unknown;
+  scenarios?: readonly ScenarioFields[];
+}
+
+export interface ScenarioFields {
+  name: unknown;
   bonuses?: readonly BonusFields[];
   amortizations?: readonly AmortizationFields[];
 }
@@ -40,13 +45,17 @@ export function validateMortgage(mortgage: MortgageFields): string | null {
   if (!isNonNegative(mortgage.interestRate)) {
     return 'Indica un tipo de interés igual o superior a 0.';
   }
-  for (const bonus of mortgage.bonuses ?? []) {
-    const error = validateBonus(bonus);
-    if (error) return error;
-  }
-  for (const item of mortgage.amortizations ?? []) {
-    const error = validateAmortization(item);
-    if (error) return error;
+  if (!mortgage.scenarios?.length) return 'La hipoteca debe tener al menos un escenario.';
+  for (const scenario of mortgage.scenarios) {
+    if (!text(scenario.name)) return 'Indica un nombre para cada escenario.';
+    for (const bonus of scenario.bonuses ?? []) {
+      const error = validateBonus(bonus);
+      if (error) return error;
+    }
+    for (const item of scenario.amortizations ?? []) {
+      const error = validateAmortization(item);
+      if (error) return error;
+    }
   }
   return null;
 }
@@ -75,7 +84,8 @@ export function validateBonus(bonus: BonusFields): string | null {
 }
 
 export function validateAmortization(item: AmortizationFields): string | null {
-  if (!isPositive(item.amount)) return 'El importe de la amortización debe ser un número mayor que 0.';
+  if (!isPositive(item.amount))
+    return 'El importe de la amortización debe ser un número mayor que 0.';
   if (!isWholeNumber(item.month, 1)) {
     return 'El primer mes de la amortización debe ser un número entero de 1 o más.';
   }

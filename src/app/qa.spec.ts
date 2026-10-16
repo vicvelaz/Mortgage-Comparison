@@ -3,9 +3,20 @@ import { provideRouter } from '@angular/router';
 import { routes } from './app.routes';
 import { Workspace } from './workspace';
 import { MortgageFormComponent } from './mortgage-form';
-import { Mortgage, calculateMortgage, relativeCostPer100 } from './mortgage-calculator';
+import {
+  Amortization,
+  Bonus,
+  Mortgage,
+  Scenario,
+  calculateMortgage as calculateScenario,
+  relativeCostPer100,
+} from './mortgage-calculator';
 
-function offer(overrides: Partial<Mortgage> = {}): Mortgage {
+type OfferOverrides = Partial<Omit<Mortgage, 'scenarios'>> &
+  Partial<Pick<Mortgage, 'scenarios'>> & { bonuses?: Bonus[]; amortizations?: Amortization[] };
+
+function offer(overrides: OfferOverrides = {}): Mortgage {
+  const { bonuses = [], amortizations = [], scenarios, ...common } = overrides;
   return {
     id: 'o1',
     name: 'Oferta',
@@ -14,11 +25,22 @@ function offer(overrides: Partial<Mortgage> = {}): Mortgage {
     years: 25,
     interestRate: 3,
     rateType: 'fixed',
-    bonuses: [],
-    amortizations: [],
+    scenarios: scenarios ?? [{ id: `${overrides.id ?? 'o1'}-base`, name: 'Base', bonuses, amortizations }],
     updatedAt: new Date(0).toISOString(),
-    ...overrides,
+    ...common,
   };
+}
+
+function calculateMortgage(
+  mortgage: Mortgage & { bonuses?: Bonus[]; amortizations?: Amortization[] },
+  scenario?: Scenario,
+) {
+  const baseScenario = scenario ?? {
+    ...mortgage.scenarios[0],
+    bonuses: mortgage.bonuses ?? mortgage.scenarios[0].bonuses,
+    amortizations: mortgage.amortizations ?? mortgage.scenarios[0].amortizations,
+  };
+  return calculateScenario(mortgage, baseScenario);
 }
 
 function createWorkspace(): Workspace {
@@ -83,11 +105,12 @@ describe('QA: validación de ofertas en Workspace', () => {
       const messages: string[] = [];
       form.notify.subscribe((message: string) => messages.push(message));
       form.draft = offer();
+      form.scenario = form.draft.scenarios[0];
       form.bonusDraft = { name: 'Seguro', interestReduction: 0.2, annualCost: 0, startMonth: 50, endMonth: 10 };
 
       form.addBonus();
 
-      expect(form.draft.bonuses).toEqual([]);
+      expect(form.scenario.bonuses).toEqual([]);
       expect(messages).toHaveLength(1);
       expect(messages[0]).toContain('Seguro');
     });
@@ -95,12 +118,13 @@ describe('QA: validación de ofertas en Workspace', () => {
     it('acepta una bonificación sin mes final (hasta el final)', () => {
       const form = new MortgageFormComponent();
       form.draft = offer();
+      form.scenario = form.draft.scenarios[0];
       form.bonusDraft = { name: 'Seguro', interestReduction: 0.2, annualCost: 0, startMonth: 1, endMonth: null };
 
       form.addBonus();
 
-      expect(form.draft.bonuses).toHaveLength(1);
-      expect(form.draft.bonuses[0].endMonth).toBeUndefined();
+      expect(form.scenario.bonuses).toHaveLength(1);
+      expect(form.scenario.bonuses[0].endMonth).toBeUndefined();
     });
 
     it('avisa de una amortización que cae fuera del plazo sin bloquearla', () => {
@@ -108,6 +132,7 @@ describe('QA: validación de ofertas en Workspace', () => {
       const messages: string[] = [];
       form.notify.subscribe((message: string) => messages.push(message));
       form.draft = offer({ years: 25 });
+      form.scenario = form.draft.scenarios[0];
       form.amortizationDraft = {
         name: '',
         type: 'single',
@@ -119,7 +144,7 @@ describe('QA: validación de ofertas en Workspace', () => {
 
       form.addAmortization();
 
-      expect(form.draft.amortizations).toHaveLength(1);
+      expect(form.scenario.amortizations).toHaveLength(1);
       expect(messages).toEqual([expect.stringContaining('fuera del plazo')]);
     });
 
@@ -128,6 +153,7 @@ describe('QA: validación de ofertas en Workspace', () => {
       const messages: string[] = [];
       form.notify.subscribe((message: string) => messages.push(message));
       form.draft = offer();
+      form.scenario = form.draft.scenarios[0];
       form.amortizationDraft = {
         name: '',
         type: 'recurring',
@@ -139,7 +165,7 @@ describe('QA: validación de ofertas en Workspace', () => {
 
       form.addAmortization();
 
-      expect(form.draft.amortizations).toEqual([]);
+      expect(form.scenario.amortizations).toEqual([]);
       expect(messages).toHaveLength(1);
     });
   });
@@ -160,7 +186,7 @@ describe('QA: comparador de ofertas no comparables (F3)', () => {
     const fixture = TestBed.createComponent(Workspace);
     const workspace = fixture.componentInstance;
     workspace.mortgages.set([lowAmount, highAmount]);
-    workspace.selectedIds.set(['a', 'b']);
+    workspace.selectedIds.set([JSON.stringify(['a', 'a-base']), JSON.stringify(['b', 'b-base'])]);
     fixture.detectChanges();
 
     expect(workspace.comparable()).toBe(false);
@@ -172,7 +198,7 @@ describe('QA: comparador de ofertas no comparables (F3)', () => {
     const fixture = TestBed.createComponent(Workspace);
     const workspace = fixture.componentInstance;
     workspace.mortgages.set([lowAmount, offer({ id: 'c', name: 'Oferta C', amount: 100000, interestRate: 2 })]);
-    workspace.selectedIds.set(['a', 'c']);
+    workspace.selectedIds.set([JSON.stringify(['a', 'a-base']), JSON.stringify(['c', 'c-base'])]);
     fixture.detectChanges();
 
     expect(workspace.comparable()).toBe(true);
@@ -186,6 +212,137 @@ describe('QA: comparador de ofertas no comparables (F3)', () => {
     expect(relativeCostPer100(lowAmount, resultA)).toBeCloseTo(75.38, 1);
     expect(relativeCostPer100(highAmount, resultB)).toBeGreaterThan(13);
     expect(relativeCostPer100(highAmount, resultB)).toBeLessThan(13.1);
+  });
+});
+
+describe('QA: gestión de escenarios', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    TestBed.configureTestingModule({ imports: [Workspace], providers: [provideRouter(routes)] });
+  });
+
+  afterEach(() => {
+    localStorage.clear();
+    vi.unstubAllGlobals();
+  });
+
+  it('crea una hipoteca nueva con un único escenario Base', () => {
+    const workspace = createWorkspace();
+
+    workspace.openNewMortgage();
+
+    expect(workspace.draft.scenarios).toHaveLength(1);
+    expect(workspace.draft.scenarios[0]).toMatchObject({
+      name: 'Base',
+      bonuses: [],
+      amortizations: [],
+    });
+  });
+
+  it('muestra en el editor los eventos del escenario seleccionado', () => {
+    const mortgage = offer({
+      scenarios: [
+        {
+          id: 'base',
+          name: 'Base',
+          bonuses: [{ id: 'base-bonus', name: 'Bono base', active: true, interestReduction: 0.2, annualCost: 0 }],
+          amortizations: [],
+        },
+        {
+          id: 'alternative',
+          name: 'Alternativo',
+          bonuses: [{ id: 'alt-bonus', name: 'Bono alternativo', active: true, interestReduction: 0.5, annualCost: 0 }],
+          amortizations: [],
+        },
+      ],
+    });
+    const fixture = TestBed.createComponent(Workspace);
+    const workspace = fixture.componentInstance;
+    workspace.mortgages.set([mortgage]);
+    workspace.editMortgage(mortgage, 'base');
+    fixture.detectChanges();
+
+    const selector = fixture.nativeElement.querySelector(
+      'select[aria-label="Seleccionar escenario"]',
+    ) as HTMLSelectElement;
+    selector.value = 'alternative';
+    selector.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    const editorText = fixture.nativeElement.querySelector('.mortgage-editor').textContent;
+    expect(workspace.selectedScenarioId()).toBe('alternative');
+    expect(editorText).toContain('Bono alternativo');
+    expect(editorText).not.toContain('Bono base');
+  });
+
+  it('duplica escenarios con identificadores y contenido independientes', () => {
+    const workspace = createWorkspace();
+    workspace.draft = offer({
+      scenarios: [{
+        id: 'base',
+        name: 'Base',
+        bonuses: [{ id: 'bonus', name: 'Nómina', active: true, interestReduction: 0.5, annualCost: 0 }],
+        amortizations: [{
+          id: 'extra',
+          name: 'Extra',
+          active: true,
+          type: 'single',
+          reductionType: 'term',
+          amount: 1000,
+          month: 12,
+        }],
+      }],
+    });
+    workspace.selectedScenarioId.set('base');
+
+    workspace.duplicateScenario();
+
+    const original = workspace.draft.scenarios[0];
+    const duplicate = workspace.activeScenario()!;
+    expect(duplicate.name).toBe('Base (copia)');
+    expect(duplicate.id).not.toBe(original.id);
+    expect(duplicate.bonuses[0].id).not.toBe(original.bonuses[0].id);
+    expect(duplicate.amortizations[0].id).not.toBe(original.amortizations[0].id);
+    duplicate.bonuses[0].active = false;
+    duplicate.amortizations[0].amount = 2000;
+    expect(original.bonuses[0].active).toBe(true);
+    expect(original.amortizations[0].amount).toBe(1000);
+  });
+
+  it('recorta nombres y rechaza un nombre vacío', () => {
+    const workspace = createWorkspace();
+    workspace.draft = offer();
+    workspace.selectedScenarioId.set('o1-base');
+    vi.stubGlobal('prompt', () => '  Plan alternativo  ');
+
+    workspace.renameScenario();
+
+    expect(workspace.activeScenario()?.name).toBe('Plan alternativo');
+    vi.stubGlobal('prompt', () => '   ');
+    workspace.renameScenario();
+    expect(workspace.activeScenario()?.name).toBe('Plan alternativo');
+    expect(workspace.status()).toContain('no puede estar vacío');
+  });
+
+  it('pide confirmación al eliminar y protege el último escenario', () => {
+    const workspace = createWorkspace();
+    workspace.draft = offer({
+      scenarios: [
+        { id: 'first', name: 'Base', bonuses: [], amortizations: [] },
+        { id: 'second', name: 'Alternativo', bonuses: [], amortizations: [] },
+      ],
+    });
+    workspace.selectedScenarioId.set('first');
+    vi.stubGlobal('confirm', () => true);
+
+    workspace.deleteScenario();
+
+    expect(workspace.draft.scenarios).toHaveLength(1);
+    expect(workspace.draft.scenarios[0].id).toBe('second');
+    expect(workspace.selectedScenarioId()).toBe('second');
+    workspace.deleteScenario();
+    expect(workspace.draft.scenarios).toHaveLength(1);
+    expect(workspace.status()).toContain('al menos un escenario');
   });
 });
 

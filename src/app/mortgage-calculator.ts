@@ -27,6 +27,13 @@ export interface AmortizationEvent {
   amount: number;
 }
 
+export interface Scenario {
+  id: string;
+  name: string;
+  bonuses: Bonus[];
+  amortizations: Amortization[];
+}
+
 export interface Mortgage {
   id: string;
   name: string;
@@ -36,8 +43,7 @@ export interface Mortgage {
   interestRate: number;
   rateType: 'fixed' | 'variable';
   startDate?: string;
-  bonuses: Bonus[];
-  amortizations: Amortization[];
+  scenarios: Scenario[];
   updatedAt: string;
 }
 
@@ -74,8 +80,8 @@ function monthlyPayment(capital: number, monthlyRate: number, months: number): n
   return Number.isFinite(payment) ? payment : capital * monthlyRate;
 }
 
-function bonusForMonth(mortgage: Mortgage, month: number) {
-  return mortgage.bonuses.reduce(
+function bonusForMonth(scenario: Scenario, month: number) {
+  return scenario.bonuses.reduce(
     (result, bonus) => {
       const inPeriod = month >= (bonus.startMonth ?? 1) && month <= (bonus.endMonth ?? Infinity);
       if (!bonus.active || !inPeriod) return result;
@@ -88,12 +94,12 @@ function bonusForMonth(mortgage: Mortgage, month: number) {
 }
 
 function amortizationsForMonth(
-  mortgage: Mortgage,
+  scenario: Scenario,
   month: number,
   enabled: boolean,
 ): Amortization[] {
   if (!enabled) return [];
-  return mortgage.amortizations.filter((item) => {
+  return scenario.amortizations.filter((item) => {
     if (!item.active) return false;
     const applies =
       item.type === 'single'
@@ -111,7 +117,11 @@ type ScheduleResult = Omit<
   'amortizationSavings' | 'amortizationInterestSavings' | 'annualPercentageRate'
 > & { cashFlows: number[] };
 
-function calculateSchedule(mortgage: Mortgage, includeAmortizations: boolean): ScheduleResult {
+function calculateSchedule(
+  mortgage: Mortgage,
+  scenario: Scenario,
+  includeAmortizations: boolean,
+): ScheduleResult {
   const plannedMonths = mortgage.years * 12;
   if (!Number.isInteger(plannedMonths) || plannedMonths < 1) {
     throw new RangeError('Mortgage term must contain a whole number of months');
@@ -127,7 +137,7 @@ function calculateSchedule(mortgage: Mortgage, includeAmortizations: boolean): S
   const rows: AmortizationRow[] = [];
 
   for (let month = 1; month <= plannedMonths && remaining > 0; month += 1) {
-    const { reduction, cost } = bonusForMonth(mortgage, month);
+    const { reduction, cost } = bonusForMonth(scenario, month);
     if (reduction > mortgage.interestRate) rateCapped = true;
     const annualRate = Math.max(0, mortgage.interestRate - reduction);
     const monthlyRate = annualRate / 100 / 12;
@@ -144,8 +154,9 @@ function calculateSchedule(mortgage: Mortgage, includeAmortizations: boolean): S
     const scheduledPrincipal = Math.min(remaining, scheduledPayment - interest);
     remaining -= scheduledPrincipal;
     const amortizationEvents: AmortizationEvent[] = [];
-    const monthAmortizations = amortizationsForMonth(mortgage, month, includeAmortizations).sort(
-      (left, right) => Number(left.reductionType === 'term') - Number(right.reductionType === 'term'),
+    const monthAmortizations = amortizationsForMonth(scenario, month, includeAmortizations).sort(
+      (left, right) =>
+        Number(left.reductionType === 'term') - Number(right.reductionType === 'term'),
     );
     let nextPayment: number = fixedPayment ?? scheduledPayment;
     let extraPayment = 0;
@@ -198,10 +209,10 @@ function calculateSchedule(mortgage: Mortgage, includeAmortizations: boolean): S
   };
 }
 
-export function calculateMortgage(mortgage: Mortgage): MortgageResult {
+export function calculateMortgage(mortgage: Mortgage, scenario: Scenario): MortgageResult {
   if (!isCalculable(mortgage)) return emptyResult();
-  const { cashFlows, ...result } = calculateSchedule(mortgage, true);
-  const withoutAmortizations = calculateSchedule(mortgage, false);
+  const { cashFlows, ...result } = calculateSchedule(mortgage, scenario, true);
+  const withoutAmortizations = calculateSchedule(mortgage, scenario, false);
   if (
     !isFiniteResult(result) ||
     !isFiniteResult(withoutAmortizations) ||
@@ -209,35 +220,39 @@ export function calculateMortgage(mortgage: Mortgage): MortgageResult {
   ) {
     return emptyResult();
   }
-  const activeAmortizations = mortgage.amortizations.filter((item) => item.active);
+  const activeAmortizations = scenario.amortizations.filter((item) => item.active);
   const orderedAmortizations = activeAmortizations
     .map((item, index) => ({ item, index }))
-    .sort((left, right) =>
-      left.item.month - right.item.month ||
-      Number(left.item.reductionType === 'term') - Number(right.item.reductionType === 'term') ||
-      left.index - right.index,
+    .sort(
+      (left, right) =>
+        left.item.month - right.item.month ||
+        Number(left.item.reductionType === 'term') - Number(right.item.reductionType === 'term') ||
+        left.index - right.index,
     );
   const savingsById = new Map<string, number>();
   let previousInterest = withoutAmortizations.totalInterest;
-  let remainingSavings = Math.round(Math.max(0, previousInterest - result.totalInterest) * 100) / 100;
+  let remainingSavings =
+    Math.round(Math.max(0, previousInterest - result.totalInterest) * 100) / 100;
   const includedIds = new Set<string>();
   for (const { item } of orderedAmortizations) {
     includedIds.add(item.id);
-    const scenario = calculateSchedule(
+    const partialScenario = calculateSchedule(
+      mortgage,
       {
-        ...mortgage,
-        amortizations: mortgage.amortizations.map((candidate) => ({
+        ...scenario,
+        amortizations: scenario.amortizations.map((candidate) => ({
           ...candidate,
           active: candidate.active && includedIds.has(candidate.id),
         })),
       },
       true,
     );
-    const marginalSavings = Math.round(Math.max(0, previousInterest - scenario.totalInterest) * 100) / 100;
+    const marginalSavings =
+      Math.round(Math.max(0, previousInterest - partialScenario.totalInterest) * 100) / 100;
     const savings = Math.min(remainingSavings, marginalSavings);
     savingsById.set(item.id, savings);
     remainingSavings -= savings;
-    previousInterest = scenario.totalInterest;
+    previousInterest = partialScenario.totalInterest;
   }
   const amortizationInterestSavings = activeAmortizations.map((item) => ({
     id: item.id,
@@ -275,11 +290,18 @@ function isCalculable(mortgage: Mortgage): boolean {
 }
 
 function isFiniteResult(
-  result: Pick<MortgageResult, 'firstPayment' | 'totalInterest' | 'bonusCost' | 'totalCost' | 'remainingCapital'>,
+  result: Pick<
+    MortgageResult,
+    'firstPayment' | 'totalInterest' | 'bonusCost' | 'totalCost' | 'remainingCapital'
+  >,
 ): boolean {
-  return [result.firstPayment, result.totalInterest, result.bonusCost, result.totalCost, result.remainingCapital].every(
-    (value) => Number.isFinite(value),
-  );
+  return [
+    result.firstPayment,
+    result.totalInterest,
+    result.bonusCost,
+    result.totalCost,
+    result.remainingCapital,
+  ].every((value) => Number.isFinite(value));
 }
 
 function emptyResult(): MortgageResult {
@@ -325,5 +347,7 @@ function annualPercentageRate(amount: number, cashFlows: number[]): number {
 }
 
 export function createId(): string {
-  return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  return (
+    globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`
+  );
 }

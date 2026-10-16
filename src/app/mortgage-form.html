@@ -9,19 +9,11 @@
   <div class="form-grid">
     <label class="field field-wide"
       ><span>Nombre de la oferta</span
-      ><input
-        name="name"
-        [(ngModel)]="draft.name"
-        placeholder="Ej. Fija bonificada"
-        required
+      ><input name="name" [(ngModel)]="draft.name" placeholder="Ej. Fija bonificada" required
     /></label>
     <label class="field"
       ><span>Entidad financiera</span
-      ><input
-        name="bank"
-        [(ngModel)]="draft.bank"
-        placeholder="Ej. Banco Central"
-        required
+      ><input name="bank" [(ngModel)]="draft.bank" placeholder="Ej. Banco Central" required
     /></label>
     <label class="field"
       ><span>Tipo de interés anual (%)</span
@@ -91,13 +83,16 @@
       <p class="eyebrow">VINCULACIONES</p>
       <h3>Bonificaciones</h3>
     </div>
-    <span>{{ draft.bonuses.length }}</span>
+    <span>{{ scenario.bonuses.length }}</span>
   </div>
-  @if (draft.bonuses.length > 0) {
+  @if (scenario.bonuses.length > 0) {
     <div class="bonus-list">
-      @for (bonus of draft.bonuses; track bonus.id) {
+      @for (bonus of scenario.bonuses; track bonus.id) {
         <div class="bonus-row">
-          <mat-checkbox [(ngModel)]="bonus.active" [name]="'bonus-active-' + bonus.id"></mat-checkbox>
+          <mat-checkbox
+            [(ngModel)]="bonus.active"
+            [name]="'bonus-active-' + bonus.id"
+          ></mat-checkbox>
           <span class="bonus-title"
             ><strong>{{ bonus.name }}</strong
             ><small
@@ -105,7 +100,9 @@
               {{ currency(bonus.annualCost) }}/año</small
             ></span
           >
-          <span class="bonus-period">{{ bonus.startMonth ?? 1 }}–{{ bonus.endMonth ?? 'fin' }}</span>
+          <span class="bonus-period"
+            >{{ bonus.startMonth ?? 1 }}–{{ bonus.endMonth ?? 'fin' }}</span
+          >
           <button
             type="button"
             class="icon-button remove-button"
@@ -168,34 +165,37 @@
       <p class="eyebrow">PAGOS EXTRAORDINARIOS</p>
       <h3>Amortizaciones</h3>
     </div>
-    <span>{{ draft.amortizations.length }}</span>
+    <span>{{ scenario.amortizations.length }}</span>
   </div>
-  @if (draft.amortizations.length > 0) {
+  @if (scenario.amortizations.length > 0) {
     <div class="amortization-list">
-      @for (item of draft.amortizations; track item.id) {
+      @for (item of scenario.amortizations; track item.id) {
         <div class="amortization-row">
           <mat-checkbox
             [(ngModel)]="item.active"
             [name]="'amortization-active-' + item.id"
             [attr.aria-label]="'Aplicar ' + item.name"
           ></mat-checkbox>
-          <span class="amort-icon" [style.background]="amortizationColor(draft, item.id)">↘</span>
+          <span class="amort-icon" [style.background]="amortizationColor(scenario, item.id)"
+            >↘</span
+          >
           <span class="bonus-title"
             ><strong>{{ item.name }} · {{ currency(item.amount) }}</strong
             ><small
               >{{ item.reductionType === 'term' ? 'Reducir plazo' : 'Reducir cuota' }} ·
-              {{ item.type === 'single' ? 'Puntual' : 'Periódica' }} · mes {{ item.month }}{{
+              {{ item.type === 'single' ? 'Puntual' : 'Periódica' }} · mes {{ item.month
+              }}{{
                 item.type === 'recurring' ? ' · cada ' + item.frequencyMonths + ' meses' : ''
               }}</small
             >
             @let interestSavings = draftAmortizationInterestSavings(item.id);
             @if (interestSavings !== null) {
-              <small>Ahorro de intereses de esta amortización: {{ currency(interestSavings) }}</small>
+              <small
+                >Ahorro de intereses de esta amortización: {{ currency(interestSavings) }}</small
+              >
             }
             @if (item.month > draft.years * 12) {
-              <small class="row-warning"
-                >Fuera del plazo de la hipoteca: no tendrá efecto.</small
-              >
+              <small class="row-warning">Fuera del plazo de la hipoteca: no tendrá efecto.</small>
             }
           </span>
           <button
@@ -213,10 +213,7 @@
   <div class="inline-form amortization-form">
     <label class="field"
       ><span>Nombre (opcional)</span
-      ><input
-        name="amortName"
-        [(ngModel)]="amortizationDraft.name"
-        placeholder="Aportación anual"
+      ><input name="amortName" [(ngModel)]="amortizationDraft.name" placeholder="Aportación anual"
     /></label>
     <label class="field"
       ><span>Frecuencia</span
@@ -270,9 +267,8 @@
     <p>
       El ahorro mostrado es solo en intereses; no incluye bonificaciones. Reducir plazo mantiene la
       cuota; reducir cuota mantiene el plazo. El ahorro de cada amortización es incremental y
-      mantiene las demás activas. Si
-      coinciden ambas estrategias en un mes, prevalece reducir plazo. Guarda la oferta para
-      actualizar las comparativas.
+      mantiene las demás activas. Si coinciden ambas estrategias en un mes, prevalece reducir plazo.
+      Guarda la oferta para actualizar las comparativas.
     </p>
     <button class="button button-primary" type="submit">Guardar oferta</button>
   </div>

@@ -141,6 +141,9 @@ app-root { display: block; min-height: 100vh; }
 .link-button:hover { text-decoration: underline; }
 
 .editor-layout { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(245px, .75fr); align-items: start; gap: 14px; }
+.scenario-controls { margin-bottom: 14px; }
+.scenario-actions { display: flex; flex-wrap: wrap; gap: 7px; }
+.scenario-selector { max-width: 360px; }
 .mortgage-editor { padding: 21px; }
 .editor-heading { margin-bottom: 18px; }
 .draft-tag { padding: 5px 8px; color: var(--teal-dark); background: var(--teal-pale); border-radius: 3px; font-size: 9px; font-weight: 700; }

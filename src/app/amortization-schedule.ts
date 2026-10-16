@@ -1,7 +1,15 @@
-import { AfterViewInit, Component, ElementRef, Input, OnChanges, OnDestroy, ViewChild } from '@angular/core';
+import {
+  AfterViewInit,
+  Component,
+  ElementRef,
+  Input,
+  OnChanges,
+  OnDestroy,
+  ViewChild,
+} from '@angular/core';
 import type { Chart as ChartInstance } from 'chart.js';
 import { Chart } from 'chart.js';
-import { Mortgage, MortgageResult } from './mortgage-calculator';
+import { Mortgage, MortgageResult, Scenario } from './mortgage-calculator';
 import { ChartViewportComponent } from './chart-viewport';
 
 const chartColors = ['#007f73', '#df765d', '#586b9c'];
@@ -19,7 +27,11 @@ const currencyFormatter = new Intl.NumberFormat('es-ES', {
   templateUrl: './amortization-schedule.html',
 })
 export class AmortizationScheduleComponent implements AfterViewInit, OnChanges, OnDestroy {
-  @Input({ required: true }) detail!: { mortgage: Mortgage; result: MortgageResult };
+  @Input({ required: true }) detail!: {
+    mortgage: Mortgage;
+    scenario: Scenario;
+    result: MortgageResult;
+  };
   @ViewChild('detailChart') private detailCanvas?: ElementRef<HTMLCanvasElement>;
 
   private chart: ChartInstance<'line'> | null = null;
@@ -40,8 +52,8 @@ export class AmortizationScheduleComponent implements AfterViewInit, OnChanges, 
     return currencyFormatter.format(value);
   }
 
-  amortizationColor(mortgage: Mortgage, id: string): string {
-    const index = mortgage.amortizations.findIndex((item) => item.id === id);
+  amortizationColor(scenario: Scenario, id: string): string {
+    const index = scenario.amortizations.findIndex((item) => item.id === id);
     return amortizationColors[(index < 0 ? 0 : index) % amortizationColors.length];
   }
 

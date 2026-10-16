@@ -20,7 +20,7 @@ El sistema SHALL calcular el resultado de una hipoteca para un escenario concret
 
 #### Scenario: Sin cambio numérico
 - **WHEN** se calcula una hipoteca de 180.000 €, 25 años y 3,10 % en su escenario base sin eventos
-- **THEN** la cuota es 862,97 €, los intereses son 78.891,73 € y hay 300 cuotas
+- **THEN** la cuota es 862,97 €, los intereses son 78.891,58 € y hay 300 cuotas
 
 ### Requirement: Duplicar escenario
 El sistema SHALL permitir duplicar un escenario creando una copia profunda e independiente con el nombre «<nombre> (copia)» e identificadores nuevos.

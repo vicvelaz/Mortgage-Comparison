@@ -6,8 +6,7 @@ const validMortgage = {
   amount: 100000,
   years: 25,
   interestRate: 3,
-  bonuses: [],
-  amortizations: [],
+  scenarios: [{ name: 'Base', bonuses: [], amortizations: [] }],
 };
 
 describe('mortgage-validation', () => {
@@ -49,7 +48,13 @@ describe('mortgage-validation', () => {
   });
 
   describe('bonificaciones', () => {
-    const bonus = { name: 'Seguro', interestReduction: 0.2, annualCost: 0, startMonth: 1, endMonth: 120 };
+    const bonus = {
+      name: 'Seguro',
+      interestReduction: 0.2,
+      annualCost: 0,
+      startMonth: 1,
+      endMonth: 120,
+    };
 
     it('acepta una bonificación válida', () => {
       expect(validateBonus(bonus)).toBeNull();
@@ -87,7 +92,9 @@ describe('mortgage-validation', () => {
     });
 
     it('acepta una periódica con frecuencia entera de al menos 1', () => {
-      expect(validateAmortization({ ...single, type: 'recurring', frequencyMonths: 12 })).toBeNull();
+      expect(
+        validateAmortization({ ...single, type: 'recurring', frequencyMonths: 12 }),
+      ).toBeNull();
     });
 
     it.each([
@@ -106,14 +113,40 @@ describe('mortgage-validation', () => {
     expect(
       validateMortgage({
         ...validMortgage,
-        bonuses: [{ name: 'Mal', interestReduction: 0, annualCost: 0, startMonth: 50, endMonth: 10 }],
+        scenarios: [
+          {
+            name: 'Base',
+            bonuses: [
+              { name: 'Mal', interestReduction: 0, annualCost: 0, startMonth: 50, endMonth: 10 },
+            ],
+            amortizations: [],
+          },
+        ],
       }),
     ).toEqual(expect.any(String));
     expect(
       validateMortgage({
         ...validMortgage,
-        amortizations: [{ amount: 0, month: 1, type: 'single' }],
+        scenarios: [
+          {
+            name: 'Base',
+            bonuses: [],
+            amortizations: [{ amount: 0, month: 1, type: 'single' }],
+          },
+        ],
       }),
     ).toEqual(expect.any(String));
+  });
+
+  it('exige al menos un escenario con nombre', () => {
+    expect(validateMortgage({ ...validMortgage, scenarios: [] })).toContain(
+      'al menos un escenario',
+    );
+    expect(
+      validateMortgage({
+        ...validMortgage,
+        scenarios: [{ name: '  ', bonuses: [], amortizations: [] }],
+      }),
+    ).toContain('nombre para cada escenario');
   });
 });

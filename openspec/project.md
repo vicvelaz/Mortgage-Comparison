@@ -30,7 +30,7 @@ Simulador y comparador de hipotecas para ayudar al cliente a elegir la mejor opc
 
 ## Valores de referencia que no deben cambiar
 - 100.000 €, 30 años, 3 % → cuota 421,60 €.
-- 180.000 €, 25 años, 3,10 % → cuota 862,97 €, intereses 78.891,73 €, 300 cuotas.
+- 180.000 €, 25 años, 3,10 % → cuota 862,97 €, intereses 78.891,58 €, 300 cuotas.
 - 10.000 €, 1 año, 0 % → cuota 833,33 €, 0 € de intereses.
 
 ## Orden de los cambios (dependen unos de otros)

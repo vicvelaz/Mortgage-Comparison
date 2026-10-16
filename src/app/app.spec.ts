@@ -2,7 +2,7 @@ import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
 import { App } from './app';
 import { routes } from './app.routes';
-import { Mortgage, calculateMortgage } from './mortgage-calculator';
+import { Amortization, Bonus, Mortgage, Scenario, calculateMortgage as calculateScenario } from './mortgage-calculator';
 import { ChartViewportComponent } from './chart-viewport';
 
 describe('App', () => {
@@ -48,6 +48,34 @@ describe('App', () => {
     expect(result.totalInterest).toBe(0);
     expect(result.remainingCapital).toBe(0);
     expect(result.totalCost).toBe(10000);
+  });
+
+  it('preserves the project reference payment, interest and term through the scenario API', () => {
+    const mortgage = createMortgage({ amount: 180000, years: 25, interestRate: 3.1 });
+    const result = calculateMortgage(mortgage, mortgage.scenarios[0]);
+
+    expect(result.firstPayment).toBeCloseTo(862.97, 2);
+    expect(result.totalInterest).toBeCloseTo(78891.58, 2);
+    expect(result.rows).toHaveLength(300);
+  });
+
+  it('calculates each scenario with its own bonuses and amortizations', () => {
+    const mortgage = createMortgage({
+      scenarios: [
+        { id: 'plain', name: 'Sin bono', bonuses: [], amortizations: [] },
+        {
+          id: 'bonified',
+          name: 'Bonificada',
+          bonuses: [{ id: 'bonus', name: 'Nómina', active: true, interestReduction: 0.5, annualCost: 0 }],
+          amortizations: [],
+        },
+      ],
+    });
+    const plain = calculateMortgage(mortgage, mortgage.scenarios[0]);
+    const bonified = calculateMortgage(mortgage, mortgage.scenarios[1]);
+
+    expect(bonified.firstPayment).toBeLessThan(plain.firstPayment);
+    expect(bonified.totalInterest).toBeLessThan(plain.totalInterest);
   });
 
   it('matches the base payment and interest totals at both effective rates', () => {
@@ -383,9 +411,19 @@ describe('App', () => {
   });
 });
 
-function createAmortization(
-  overrides: Partial<Mortgage['amortizations'][number]> = {},
-): Mortgage['amortizations'][number] {
+function calculateMortgage(
+  mortgage: Mortgage & { bonuses?: Bonus[]; amortizations?: Amortization[] },
+  scenario?: Scenario,
+) {
+  const baseScenario = scenario ?? {
+    ...mortgage.scenarios[0],
+    bonuses: mortgage.bonuses ?? mortgage.scenarios[0].bonuses,
+    amortizations: mortgage.amortizations ?? mortgage.scenarios[0].amortizations,
+  };
+  return calculateScenario(mortgage, baseScenario);
+}
+
+function createAmortization(overrides: Partial<Amortization> = {}): Amortization {
   return {
     id: 'extra',
     name: 'Extra',
@@ -398,9 +436,16 @@ function createAmortization(
   };
 }
 
-function createMortgage(overrides: Partial<Mortgage>): Mortgage {
+type MortgageOverrides = Partial<Omit<Mortgage, 'scenarios'>> &
+  Partial<Pick<Mortgage, 'scenarios'>> & { bonuses?: Bonus[]; amortizations?: Amortization[] };
+
+function createMortgage(overrides: MortgageOverrides = {}): Mortgage {
+  const { bonuses = [], amortizations = [], scenarios, ...common } = overrides;
   return {
     id: 'test', name: 'Prueba', bank: 'Banco', amount: 100000, years: 10, interestRate: 3,
-    rateType: 'fixed', bonuses: [], amortizations: [], updatedAt: new Date(0).toISOString(), ...overrides,
+    rateType: 'fixed',
+    scenarios: scenarios ?? [{ id: 'base', name: 'Base', bonuses, amortizations }],
+    updatedAt: new Date(0).toISOString(),
+    ...common,
   };
 }

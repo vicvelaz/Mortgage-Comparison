@@ -2,7 +2,7 @@
   <div class="panel-heading">
     <div>
       <p class="eyebrow">DETALLE DE LA OFERTA</p>
-      <h2>Calendario de amortización · {{ detail.mortgage.name }}</h2>
+      <h2>Calendario de amortización · {{ detail.mortgage.name }} · {{ detail.scenario.name }}</h2>
     </div>
     <span class="schedule-caption">{{ detail.result.rows.length }} mensualidades</span>
   </div>
@@ -21,7 +21,10 @@
       ><strong class="positive-value">{{ currency(detail.result.amortizationSavings) }}</strong>
     </div>
   </div>
-  <app-chart-viewport class="detail-chart-frame" label="Capital e intereses del calendario de amortización">
+  <app-chart-viewport
+    class="detail-chart-frame"
+    label="Capital e intereses del calendario de amortización"
+  >
     <canvas
       #detailChart
       aria-label="Evolución del capital pendiente, intereses acumulados y capital amortizado"
@@ -51,9 +54,11 @@
               @for (event of row.amortizationEvents; track event.id) {
                 <span
                   class="amortization-dot"
-                  [style.background]="amortizationColor(detail.mortgage, event.id)"
+                  [style.background]="amortizationColor(detail.scenario, event.id)"
                   [title]="event.name + ' · mes ' + row.month + ': ' + currency(event.amount)"
-                  [attr.aria-label]="event.name + ' en mes ' + row.month + ': ' + currency(event.amount)"
+                  [attr.aria-label]="
+                    event.name + ' en mes ' + row.month + ': ' + currency(event.amount)
+                  "
                 ></span>
               }
             </td>

@@ -47,6 +47,12 @@
       <p>La hipoteca quedará cancelada en el mes {{ month }}.</p>
     </div>
   }
+  @if (detail.result.monthlyBudgetCancellationMonth; as month) {
+    <div class="notice">
+      <span>i</span>
+      <p>Con esta configuración la hipoteca quedará cancelada en el mes {{ month }}.</p>
+    </div>
+  }
   <app-chart-viewport
     class="detail-chart-frame"
     label="Capital e intereses del calendario de amortización"
@@ -61,10 +67,10 @@
       <thead>
         <tr>
           <th>Mes</th>
-          <th>Cuota</th>
+          <th>Cuota ordinaria</th>
           <th>Interés</th>
           <th>Capital</th>
-          <th>Extra</th>
+          <th>Amortización extra</th>
           <th>Comisiones</th>
           <th>Capital pendiente</th>
         </tr>

@@ -34,6 +34,7 @@ const base: Mortgage = {
         },
         { id: 'b2', name: 'Seguro hogar', active: false, interestReduction: 0.2, annualCost: 0 },
       ],
+      mode: 'reduceInstallment',
       amortizations: [
         {
           id: 'a1',

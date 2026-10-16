@@ -5,6 +5,7 @@ import { Workspace } from './workspace';
 import { MortgageFormComponent } from './mortgage-form';
 import {
   Amortization,
+  AmortizationMode,
   Bonus,
   Mortgage,
   Scenario,
@@ -12,8 +13,12 @@ import {
   relativeCostPer100,
 } from './mortgage-calculator';
 
-type OfferOverrides = Partial<Omit<Mortgage, 'scenarios'>> &
-  Partial<Pick<Mortgage, 'scenarios'>> & { bonuses?: Bonus[]; amortizations?: Amortization[] };
+type ScenarioInput = Omit<Scenario, 'mode'> & { mode?: AmortizationMode };
+type OfferOverrides = Partial<Omit<Mortgage, 'scenarios'>> & {
+  scenarios?: ScenarioInput[];
+  bonuses?: Bonus[];
+  amortizations?: Amortization[];
+};
 
 function offer(overrides: OfferOverrides = {}): Mortgage {
   const { bonuses = [], amortizations = [], scenarios, ...common } = overrides;
@@ -26,8 +31,17 @@ function offer(overrides: OfferOverrides = {}): Mortgage {
     interestRate: 3,
     rateType: 'fixed',
     cancellationFees: { partial: [], total: [] },
-    scenarios: scenarios ?? [
-      { id: `${overrides.id ?? 'o1'}-base`, name: 'Base', bonuses, amortizations },
+    scenarios: scenarios?.map((scenario) => ({
+      ...scenario,
+      mode: scenario.mode ?? 'reduceInstallment',
+    })) ?? [
+      {
+        id: `${overrides.id ?? 'o1'}-base`,
+        name: 'Base',
+        bonuses,
+        amortizations,
+        mode: 'reduceInstallment',
+      },
     ],
     updatedAt: new Date(0).toISOString(),
     ...common,
@@ -255,6 +269,44 @@ describe('QA: gestión de escenarios', () => {
       bonuses: [],
       amortizations: [],
     });
+  });
+
+  it('edita la cantidad mensual y el modo del escenario', async () => {
+    const fixture = TestBed.createComponent(Workspace);
+    const workspace = fixture.componentInstance;
+    workspace.openNewMortgage();
+    fixture.detectChanges();
+
+    const enabled = fixture.nativeElement.querySelector(
+      'input[name="monthlyBudgetEnabled"]',
+    ) as HTMLInputElement;
+    enabled.checked = true;
+    enabled.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    const amount = fixture.nativeElement.querySelector(
+      'input[name="monthlyBudgetAmount"]',
+    ) as HTMLInputElement;
+    amount.value = '1500';
+    amount.dispatchEvent(new Event('input', { bubbles: true }));
+    amount.dispatchEvent(new Event('change', { bubbles: true }));
+    fixture.detectChanges();
+    await fixture.whenStable();
+    fixture.detectChanges();
+
+    const mode = fixture.nativeElement.querySelector(
+      'select[name="scenarioAmortizationMode"]',
+    ) as HTMLSelectElement;
+    mode.value = 'reduceTerm';
+    mode.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    expect(workspace.activeScenario()?.monthlyBudget?.amount).toBe(1500);
+    expect(workspace.activeScenario()?.monthlyBudget?.startMonth).toBe(1);
+    expect(workspace.activeScenario()?.mode).toBe('reduceTerm');
+    expect(fixture.nativeElement.querySelector('.mortgage-editor').textContent).toContain(
+      'Reducir plazo mantiene la cuota ordinaria',
+    );
   });
 
   it('muestra en el editor los eventos del escenario seleccionado', () => {

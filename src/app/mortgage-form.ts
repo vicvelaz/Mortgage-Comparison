@@ -202,6 +202,38 @@ export class MortgageFormComponent {
     });
   }
 
+  setMonthlyBudgetEnabled(event: Event): void {
+    if (!(event.currentTarget instanceof HTMLInputElement)) return;
+    const enabled = event.currentTarget.checked;
+    this.replaceScenario({
+      ...this.scenario,
+      ...(enabled
+        ? { monthlyBudget: { amount: 1000, startMonth: 1 } }
+        : { monthlyBudget: undefined }),
+    });
+  }
+
+  setMonthlyBudgetField(field: 'amount' | 'startMonth' | 'endMonth', event: Event): void {
+    if (!(event.currentTarget instanceof HTMLInputElement) || !this.scenario.monthlyBudget) return;
+    const input = event.currentTarget;
+    const value = input.valueAsNumber;
+    const monthlyBudget = { ...this.scenario.monthlyBudget };
+    if (field === 'amount') monthlyBudget.amount = Number.isFinite(value) ? value : 0;
+    if (field === 'startMonth') monthlyBudget.startMonth = Number.isFinite(value) ? value : 0;
+    if (field === 'endMonth') {
+      if (input.value === '') delete monthlyBudget.endMonth;
+      else monthlyBudget.endMonth = Number.isFinite(value) ? value : 0;
+    }
+    this.replaceScenario({ ...this.scenario, monthlyBudget });
+  }
+
+  setAmortizationMode(event: Event): void {
+    if (!(event.currentTarget instanceof HTMLSelectElement)) return;
+    const mode = event.currentTarget.value;
+    if (mode !== 'reduceInstallment' && mode !== 'reduceTerm') return;
+    this.replaceScenario({ ...this.scenario, mode });
+  }
+
   maxAmortizableAmount(): number {
     return maxAmortizableAt(this.draft, this.scenario, this.amortizationDraft.month) / 100;
   }
@@ -282,5 +314,12 @@ export class MortgageFormComponent {
     );
     this.scenario = candidate;
     return true;
+  }
+
+  private replaceScenario(candidate: Scenario): void {
+    this.draft.scenarios = this.draft.scenarios.map((scenario) =>
+      scenario.id === candidate.id ? candidate : scenario,
+    );
+    this.scenario = candidate;
   }
 }

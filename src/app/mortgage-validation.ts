@@ -33,6 +33,8 @@ export interface ScenarioFields {
   name: unknown;
   bonuses?: readonly BonusFields[];
   amortizations?: readonly AmortizationFields[];
+  monthlyBudget?: unknown;
+  mode?: unknown;
 }
 
 export function validateMortgage(mortgage: MortgageFields): string | null {
@@ -122,6 +124,17 @@ export function validateScenario(
   scenario: Scenario,
   changedAmortizationId?: string,
 ): string | null {
+  if (
+    scenario.mode !== undefined &&
+    scenario.mode !== 'reduceInstallment' &&
+    scenario.mode !== 'reduceTerm'
+  ) {
+    return 'El modo de amortización no es válido.';
+  }
+  if (scenario.monthlyBudget !== undefined) {
+    const error = validateMonthlyBudget(scenario.monthlyBudget);
+    if (error) return error;
+  }
   const singles = scenario.amortizations
     .map((item, index) => ({ item, index }))
     .filter(({ item }) => item.active && item.type === 'single')
@@ -183,6 +196,25 @@ export function validateScenario(
         }
       }
     }
+  }
+  return null;
+}
+
+export function validateMonthlyBudget(value: unknown): string | null {
+  if (!isRecord(value)) return 'La cantidad mensual dedicada no tiene un formato válido.';
+  if (!isPositive(value['amount'])) {
+    return 'La cantidad mensual dedicada debe ser un número mayor que 0.';
+  }
+  if (!isWholeNumber(value['startMonth'], 1)) {
+    return 'El mes inicial de la cantidad mensual debe ser un número entero de 1 o más.';
+  }
+  const endMonth = value['endMonth'];
+  if (endMonth === undefined || endMonth === null) return null;
+  if (!isWholeNumber(endMonth, 1)) {
+    return 'El mes final de la cantidad mensual debe ser un número entero de 1 o más, o quedar vacío.';
+  }
+  if (endMonth < value['startMonth']) {
+    return 'El mes final de la cantidad mensual no puede ser anterior al mes inicial.';
   }
   return null;
 }

@@ -1,9 +1,11 @@
 import {
   Amortization,
+  AmortizationMode,
   Bonus,
   CancellationFees,
   FeeTier,
   Mortgage,
+  MonthlyBudget,
   Scenario,
   createId,
 } from './mortgage-calculator';
@@ -370,7 +372,51 @@ function parseScenario(
         : {}),
     });
   }
-  return { ok: true, value: { id: value['id'], name: value['name'], bonuses, amortizations } };
+  if (
+    value['mode'] !== undefined &&
+    value['mode'] !== 'reduceInstallment' &&
+    value['mode'] !== 'reduceTerm'
+  ) {
+    return {
+      ok: false,
+      error: `Oferta inválida «${mortgageName}»: el modo de amortización no es válido.`,
+    };
+  }
+  const mode: AmortizationMode =
+    value['mode'] === 'reduceTerm' ? 'reduceTerm' : 'reduceInstallment';
+  let monthlyBudget: MonthlyBudget | undefined;
+  if (value['monthlyBudget'] !== undefined) {
+    const rawBudget = value['monthlyBudget'];
+    if (
+      !isRecord(rawBudget) ||
+      typeof rawBudget['amount'] !== 'number' ||
+      typeof rawBudget['startMonth'] !== 'number' ||
+      (rawBudget['endMonth'] !== undefined &&
+        rawBudget['endMonth'] !== null &&
+        typeof rawBudget['endMonth'] !== 'number')
+    ) {
+      return {
+        ok: false,
+        error: `Oferta inválida «${mortgageName}»: la cantidad mensual no tiene el formato esperado.`,
+      };
+    }
+    monthlyBudget = {
+      amount: rawBudget['amount'],
+      startMonth: rawBudget['startMonth'],
+      ...(typeof rawBudget['endMonth'] === 'number' ? { endMonth: rawBudget['endMonth'] } : {}),
+    };
+  }
+  return {
+    ok: true,
+    value: {
+      id: value['id'],
+      name: value['name'],
+      bonuses,
+      amortizations,
+      mode,
+      ...(monthlyBudget ? { monthlyBudget } : {}),
+    },
+  };
 }
 
 function keepBackup(storage: StorageLike, key: string, raw: string): boolean {

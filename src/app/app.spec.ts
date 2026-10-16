@@ -4,6 +4,7 @@ import { App } from './app';
 import { routes } from './app.routes';
 import {
   Amortization,
+  AmortizationMode,
   Bonus,
   Mortgage,
   Scenario,
@@ -729,8 +730,12 @@ function createAmortization(overrides: Partial<Amortization> = {}): Amortization
   };
 }
 
-type MortgageOverrides = Partial<Omit<Mortgage, 'scenarios'>> &
-  Partial<Pick<Mortgage, 'scenarios'>> & { bonuses?: Bonus[]; amortizations?: Amortization[] };
+type ScenarioInput = Omit<Scenario, 'mode'> & { mode?: AmortizationMode };
+type MortgageOverrides = Partial<Omit<Mortgage, 'scenarios'>> & {
+  scenarios?: ScenarioInput[];
+  bonuses?: Bonus[];
+  amortizations?: Amortization[];
+};
 
 function createMortgage(overrides: MortgageOverrides = {}): Mortgage {
   const { bonuses = [], amortizations = [], scenarios, ...common } = overrides;
@@ -743,7 +748,18 @@ function createMortgage(overrides: MortgageOverrides = {}): Mortgage {
     interestRate: 3,
     rateType: 'fixed',
     cancellationFees: { partial: [], total: [] },
-    scenarios: scenarios ?? [{ id: 'base', name: 'Base', bonuses, amortizations }],
+    scenarios: scenarios?.map((scenario) => ({
+      ...scenario,
+      mode: scenario.mode ?? 'reduceInstallment',
+    })) ?? [
+      {
+        id: 'base',
+        name: 'Base',
+        bonuses,
+        amortizations,
+        mode: 'reduceInstallment',
+      },
+    ],
     updatedAt: new Date(0).toISOString(),
     ...common,
   };

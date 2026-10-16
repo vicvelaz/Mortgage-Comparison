@@ -80,6 +80,80 @@
   <div class="editor-divider"></div>
   <div class="subsection-heading">
     <div>
+      <p class="eyebrow">PRESUPUESTO MENSUAL</p>
+      <h3>Cantidad mensual dedicada</h3>
+    </div>
+  </div>
+  <label class="field">
+    <span>
+      <input
+        name="monthlyBudgetEnabled"
+        type="checkbox"
+        [checked]="!!scenario.monthlyBudget"
+        (change)="setMonthlyBudgetEnabled($event)"
+      />
+      Definir una cantidad mensual para la hipoteca
+    </span>
+  </label>
+  @if (scenario.monthlyBudget; as monthlyBudget) {
+    <div class="inline-form">
+      <label class="field"
+        ><span>Cantidad mensual</span>
+        <div class="input-suffix">
+          <input
+            name="monthlyBudgetAmount"
+            type="number"
+            min="0.01"
+            step="1"
+            [value]="monthlyBudget.amount"
+            (input)="setMonthlyBudgetField('amount', $event)"
+          /><span>€</span>
+        </div></label
+      >
+      <label class="field"
+        ><span>Desde mes</span>
+        <input
+          name="monthlyBudgetStartMonth"
+          type="number"
+          min="1"
+          step="1"
+          [value]="monthlyBudget.startMonth"
+          (input)="setMonthlyBudgetField('startMonth', $event)"
+        />
+      </label>
+      <label class="field"
+        ><span>Hasta mes (opcional)</span>
+        <input
+          name="monthlyBudgetEndMonth"
+          type="number"
+          min="1"
+          step="1"
+          placeholder="Fin"
+          [value]="monthlyBudget.endMonth ?? ''"
+          (input)="setMonthlyBudgetField('endMonth', $event)"
+        />
+      </label>
+    </div>
+  }
+  <label class="field">
+    <span>Modo de amortización</span>
+    <select
+      name="scenarioAmortizationMode"
+      [value]="scenario.mode ?? 'reduceInstallment'"
+      (change)="setAmortizationMode($event)"
+    >
+      <option value="reduceInstallment">Reducir cuota</option>
+      <option value="reduceTerm">Reducir plazo</option>
+    </select>
+  </label>
+  <p class="field-hint">
+    Reducir cuota recalcula el pago mensual y mantiene el plazo. Reducir plazo mantiene la cuota
+    ordinaria y termina antes; si cambia el tipo de interés, la cuota se vuelve a calcular.
+  </p>
+
+  <div class="editor-divider"></div>
+  <div class="subsection-heading">
+    <div>
       <p class="eyebrow">AMORTIZACIÓN ANTICIPADA</p>
       <h3>Comisiones por amortización anticipada</h3>
     </div>
@@ -173,6 +247,12 @@
     <div class="notice">
       <span>i</span>
       <p>La hipoteca quedará cancelada en el mes {{ month }}.</p>
+    </div>
+  }
+  @if (draftResult?.monthlyBudgetCancellationMonth; as month) {
+    <div class="notice">
+      <span>i</span>
+      <p>Con esta configuración la hipoteca quedará cancelada en el mes {{ month }}.</p>
     </div>
   }
 

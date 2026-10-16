@@ -82,7 +82,15 @@ function emptyMortgage(): Mortgage {
     interestRate: 3.1,
     rateType: 'fixed',
     cancellationFees: { partial: [], total: [] },
-    scenarios: [{ id: createId(), name: 'Base', bonuses: [], amortizations: [] }],
+    scenarios: [
+      {
+        id: createId(),
+        name: 'Base',
+        bonuses: [],
+        amortizations: [],
+        mode: 'reduceInstallment',
+      },
+    ],
     updatedAt: new Date().toISOString(),
   };
 }
@@ -274,6 +282,7 @@ export class Workspace implements AfterViewInit, OnDestroy {
       name: `Escenario ${this.draft.scenarios.length + 1}`,
       bonuses: [],
       amortizations: [],
+      mode: 'reduceInstallment',
     };
     this.draft.scenarios = [...this.draft.scenarios, scenario];
     this.selectedScenarioId.set(scenario.id);

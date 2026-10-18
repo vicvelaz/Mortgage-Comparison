@@ -78,7 +78,7 @@ export class MortgageFormComponent {
     return amortizationColors[(index < 0 ? 0 : index) % amortizationColors.length];
   }
 
-  /** Resultado del borrador; null mientras el borrador no es válido. */
+  /** Resultado del borrador; null mientras el borrador no es válido */
   get draftResult(): MortgageResult | null {
     const snapshot = JSON.stringify([this.draft, this.scenario]);
     if (this.draftCache?.snapshot !== snapshot) {

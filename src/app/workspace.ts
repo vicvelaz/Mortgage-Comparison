@@ -461,6 +461,16 @@ export class Workspace implements AfterViewInit, OnDestroy {
         return;
       }
       const mortgages = result.value;
+      const currentMortgages = this.mortgages();
+      if (
+        currentMortgages.length > 0 &&
+        !window.confirm(
+          `Importar sustituirá tus ${currentMortgages.length} ofertas actuales. ¿Continuar?`,
+        )
+      ) {
+        this.status.set('Importación cancelada.');
+        return;
+      }
       this.mortgages.set(mortgages);
       this.selectedIds.set(
         mortgages

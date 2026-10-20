@@ -1,5 +1,12 @@
 {
     "chat.tools.terminal.autoApprove": {
-        "npx ng": true
+        "npx ng": true,
+        "openspec": true,
+        "Test-Path": true,
+        "tar": true,
+        "/^python -c \"import zipfile; z=zipfile\\.ZipFile\\('qa-bateria-v4\\.zip'\\); s=z\\.read\\('src/app/qa-v2\\.spec\\.ts'\\)\\.decode\\(\\); print\\('\\\\n'\\.join\\(f'\\{i\\+1\\}: \\{line\\}' for i,line in enumerate\\(s\\.splitlines\\(\\)\\) if 'U38' in line or 'importData' in line or 'parseMortgageFile' in line\\)\\); print\\('--- gen head ---'\\); print\\('\\\\n'\\.join\\(z\\.read\\('qa/gen\\.ts'\\)\\.decode\\(\\)\\.splitlines\\(\\)\\[:35\\]\\)\\); print\\('--- README ---'\\); print\\(z\\.read\\('qa/README\\.md'\\)\\.decode\\(\\)\\)\"$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
     }
 }

@@ -1,5 +1,5 @@
-import { calculateMortgage, Mortgage, Scenario } from './mortgage-calculator';
-import { validateMonthlyBudget } from './mortgage-validation';
+import { calculateMortgage, maxAmortizableAt, Mortgage, Scenario } from './mortgage-calculator';
+import { validateMonthlyBudget, validateScenario } from './mortgage-validation';
 import {
   loadMortgages,
   parseMortgageFile,
@@ -381,7 +381,12 @@ describe('monthly budget amortization', () => {
           const offer = mortgage({ amount, years, interestRate });
           const result = calculateMortgage(offer, offer.scenarios[0]);
           const serialized = JSON.stringify([
-            result.rows.map((row) => [row.payment, row.interest, row.principal, row.remainingCapital]),
+            result.rows.map((row) => [
+              row.payment,
+              row.interest,
+              row.principal,
+              row.remainingCapital,
+            ]),
             result.totalInterest,
             result.totalCost,
           ]);
@@ -489,5 +494,196 @@ describe('monthly budget amortization', () => {
 
     expect(loaded.mortgages).toEqual([]);
     expect(loaded.notice).toContain('Se recuperaron 0 de 1 oferta');
+  });
+});
+
+describe('effective term horizon and fee rounding', () => {
+  const temporaryBonus = {
+    id: 'temporary-bonus',
+    name: 'Bonificación temporal',
+    active: true,
+    interestReduction: 1.5,
+    annualCost: 0,
+    startMonth: 1,
+    endMonth: 36,
+  };
+
+  function termScenario(bonuses: Scenario['bonuses'] = []): Scenario {
+    return {
+      id: 'scenario',
+      name: 'Base',
+      bonuses,
+      amortizations: [
+        {
+          id: 'term',
+          name: 'Reducir plazo',
+          active: true,
+          type: 'single',
+          reductionType: 'term',
+          amount: 20000,
+          month: 12,
+        },
+      ],
+      mode: 'reduceInstallment',
+    };
+  }
+
+  it.each([
+    ['A1: bonificación permanente', [temporaryBonus], 257, 807.51, 807.51, 47408],
+    ['A2: bonificación hasta el mes 36', [temporaryBonus], 257, 807.51, 914.3, 71130],
+    ['A3: sin amortización', [temporaryBonus], 300, 807.51, 934.23, 95708],
+  ])(
+    '%s conserva el plazo vigente esperado',
+    (_label, bonuses, months, payment36, payment37, interest) => {
+      const offer = mortgage({ amount: 180000, years: 25, interestRate: 4 });
+      const scenario =
+        _label === 'A3: sin amortización'
+          ? { ...termScenario(bonuses), amortizations: [] }
+          : termScenario(
+              _label === 'A1: bonificación permanente'
+                ? [{ ...temporaryBonus, endMonth: undefined }]
+                : bonuses,
+            );
+      const result = calculateMortgage(offer, scenario);
+
+      expect(result.rows).toHaveLength(months);
+      expect(result.rows[35].payment).toBeCloseTo(payment36, 2);
+      expect(result.rows[36].payment).toBeCloseTo(payment37, 2);
+      expect(result.totalInterest).toBeCloseTo(interest, 0);
+    },
+  );
+
+  it.each([
+    ['B1: solo reducir plazo', false, 250, 950.11, 77060.53],
+    ['B2: reducir plazo y después reducir cuota', true, 250, 877.21, 73677.06],
+  ])('%s conserva el horizonte reducido', (_label, addPayment, months, payment61, interest) => {
+    const offer = mortgage({ amount: 180000, years: 25, interestRate: 4 });
+    const scenario: Scenario = {
+      ...termScenario(),
+      amortizations: [
+        ...termScenario().amortizations,
+        ...(addPayment
+          ? [
+              {
+                id: 'payment',
+                name: 'Reducir cuota',
+                active: true,
+                type: 'single' as const,
+                reductionType: 'payment' as const,
+                amount: 10000,
+                month: 60,
+              },
+            ]
+          : []),
+      ],
+    };
+    const result = calculateMortgage(offer, scenario);
+
+    expect(result.rows).toHaveLength(months);
+    expect(result.rows[58].payment).toBeCloseTo(950.11, 2);
+    expect(result.rows[60].payment).toBeCloseTo(payment61, 2);
+    expect(result.totalInterest).toBeCloseTo(interest, 0);
+  });
+
+  it('accepts a full cancellation at the calculated balance and rejects one cent more', () => {
+    const offer = mortgage({ amount: 180000, years: 25, interestRate: 4 });
+    const scenario = termScenario();
+    const maximum = maxAmortizableAt(offer, { ...scenario, amortizations: [] }, 12);
+    const cancellation: Scenario = {
+      ...scenario,
+      amortizations: [
+        {
+          ...scenario.amortizations[0],
+          amount: maximum / 100,
+        },
+      ],
+    };
+
+    expect(maximum).toBeGreaterThan(0);
+    expect(validateScenario(offer, cancellation)).toBeNull();
+    expect(
+      validateScenario(offer, {
+        ...cancellation,
+        amortizations: [{ ...cancellation.amortizations[0], amount: maximum / 100 + 0.01 }],
+      }),
+    ).toContain('supera el capital restante');
+  });
+
+  it('keeps balances finite, nonnegative, and nonincreasing in reduce-term mode', () => {
+    const offer = mortgage({ amount: 1000, years: 5, interestRate: 12 });
+    const result = calculateMortgage(offer, {
+      ...budgetScenario(2, 'reduceTerm'),
+      amortizations: [
+        {
+          id: 'term',
+          name: 'Reducir plazo',
+          active: true,
+          type: 'single',
+          reductionType: 'term',
+          amount: 100,
+          month: 3,
+        },
+      ],
+    });
+    const balances = result.rows.map((row) => row.remainingCapital);
+
+    expect(result.remainingCapital).toBe(0);
+    expect(
+      result.rows.every(
+        (row) =>
+          Number.isFinite(row.payment) &&
+          Number.isFinite(row.remainingCapital) &&
+          row.remainingCapital >= 0,
+      ),
+    ).toBe(true);
+    expect(balances.every((balance, index) => index === 0 || balance <= balances[index - 1])).toBe(
+      true,
+    );
+  });
+
+  it.each([
+    [242.5, 1, 2.43],
+    [0.5, 1, 0.01],
+    [10, 0.25, 0.03],
+    [1000, 0.15, 1.5],
+  ])('rounds a %s euro partial amortization fee at %s percent', (amount, percent, expected) => {
+    const offer = mortgage({
+      amount: 100000,
+      cancellationFees: { partial: [{ fromMonth: 1, percent }], total: [] },
+    });
+    const scenario: Scenario = {
+      ...offer.scenarios[0],
+      amortizations: [
+        {
+          id: 'fee',
+          name: 'Comisión',
+          active: true,
+          type: 'single',
+          reductionType: 'payment',
+          amount,
+          month: 1,
+        },
+      ],
+    };
+    const result = calculateMortgage(offer, scenario);
+
+    expect(result.rows[0].fee).toBe(expected);
+  });
+
+  it('charges 2.43 euros in each of 159 monthly budget amortizations', () => {
+    const offer = mortgage({
+      amount: 71750.83,
+      cancellationFees: { partial: [{ fromMonth: 1, percent: 1 }], total: [] },
+    });
+    const ordinaryPayment = calculateMortgage(offer, offer.scenarios[0]).firstPayment;
+    const result = calculateMortgage(
+      offer,
+      budgetScenario(ordinaryPayment + 244.93, 'reduceTerm', 159),
+    );
+
+    const amortizationRows = result.rows.filter((row) => row.extraPayment > 0);
+    expect(amortizationRows).toHaveLength(159);
+    expect(amortizationRows.every((row) => row.fee === 2.43)).toBe(true);
+    expect(amortizationRows.reduce((sum, row) => sum + row.fee, 0)).toBeCloseTo(159 * 2.43, 2);
   });
 });

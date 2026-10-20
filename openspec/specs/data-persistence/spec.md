@@ -57,6 +57,25 @@ El sistema SHALL importar archivos JSON en esquema v1 (migrándolos al vuelo) y 
 - **WHEN** el archivo contiene una oferta con plazo de 200 años
 - **THEN** la importación se rechaza con un mensaje que incluye el nombre de la oferta y el motivo
 
+### Requirement: Confirmación al importar
+El sistema SHALL confirmar antes de sustituir las ofertas actuales al importar un archivo válido y SHALL conservarlas si el usuario cancela.
+
+#### Scenario: Importar con ofertas y confirmar
+- **WHEN** existen ofertas actuales y el usuario confirma la importación de un archivo válido
+- **THEN** el sistema sustituye las ofertas actuales por las importadas y muestra «Importación completada.»
+
+#### Scenario: Importar con ofertas y cancelar
+- **WHEN** existen ofertas actuales y el usuario cancela la importación
+- **THEN** el sistema conserva las ofertas actuales, limpia el selector de archivo y muestra «Importación cancelada.»
+
+#### Scenario: Importar sin ofertas actuales
+- **WHEN** no existen ofertas actuales y el usuario importa un archivo válido
+- **THEN** el sistema importa el archivo sin pedir confirmación
+
+#### Scenario: Archivo inválido
+- **WHEN** el usuario selecciona un archivo inválido mientras existen ofertas actuales
+- **THEN** el sistema rechaza el archivo sin pedir confirmación y conserva las ofertas actuales
+
 ### Requirement: Exportación en v2
 El sistema SHALL exportar siempre en esquema v2 con `schemaVersion: 2`.
 

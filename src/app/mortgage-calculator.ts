@@ -150,12 +150,25 @@ function toCents(value: number): number {
   return Number.isFinite(cents) ? cents : Math.sign(value) * Number.MAX_SAFE_INTEGER;
 }
 
+function roundHalfUpCents(cents: number): number {
+  return Math.floor(cents + 0.5 + 1e-9);
+}
+
 function fromCents(value: number): number {
   return value / 100;
 }
 
 function roundCents(value: number): number {
   return fromCents(toCents(value));
+}
+
+function monthsToPayOff(balance: number, monthlyRate: number, payment: number): number {
+  if (balance <= 0) return 0;
+  if (!(payment > 0)) return Infinity;
+  if (monthlyRate === 0) return Math.max(1, Math.ceil(balance / payment - 1e-9));
+  const ratio = (balance * monthlyRate) / payment;
+  if (ratio >= 1) return Infinity;
+  return Math.max(1, Math.ceil(-Math.log1p(-ratio) / Math.log1p(monthlyRate) - 1e-9));
 }
 
 function feePercent(mortgage: Mortgage, month: number, total: boolean): number {
@@ -188,6 +201,7 @@ function calculateSchedule(
   let amortizationFees = 0;
   let cumulativePrincipal = 0;
   let fixedPayment: number | null = null;
+  let effectiveEndMonth = plannedMonths;
   let previousMonthlyRate: number | null = null;
   let rateCapped = false;
   let totalCancellationMonth: number | null = null;
@@ -203,7 +217,7 @@ function calculateSchedule(
     const annualRate = Math.max(0, mortgage.interestRate - reduction);
     const monthlyRate = annualRate / 100 / 12;
     const interest = remaining * monthlyRate;
-    const monthsLeft = plannedMonths - month + 1;
+    const monthsLeft = Math.max(1, effectiveEndMonth - month + 1);
     const rateChanged = previousMonthlyRate !== null && monthlyRate !== previousMonthlyRate;
     const repricePayment = rateChanged;
     const scheduledPayment: number =
@@ -256,6 +270,7 @@ function calculateSchedule(
       fixedPayment === null || repricePayment ? scheduledPayment : fixedPayment;
     let extraPayment = 0;
     let fee = 0;
+    let termEventApplied = false;
     for (const item of monthAmortizations) {
       const requestedCents = toCents(item.amount);
       const balanceCents = toCents(remaining);
@@ -264,9 +279,10 @@ function calculateSchedule(
       const amount = totalCancellation ? remaining : Math.min(remaining, fromCents(requestedCents));
       if (amount <= 0) continue;
       const percent = feePercent(mortgage, month, totalCancellation);
-      const eventFee = roundCents((amount * percent) / 100);
+      const eventFee = fromCents(roundHalfUpCents((toCents(amount) * percent) / 100));
       remaining = totalCancellation ? 0 : Math.max(0, remaining - amount);
       if (item.id === 'monthly-budget') monthlyBudgetApplied = true;
+      if (item.reductionType === 'term') termEventApplied = true;
       extraPayment += amount;
       fee += eventFee;
       amortizationEvents.push({
@@ -284,6 +300,12 @@ function calculateSchedule(
       if (item.reductionType === 'payment' && monthsLeft > 1 && remaining > 0) {
         nextPayment = monthlyPayment(remaining, monthlyRate, monthsLeft - 1);
       }
+    }
+    if (termEventApplied && remaining > 0) {
+      effectiveEndMonth = Math.min(
+        plannedMonths,
+        month + monthsToPayOff(remaining, monthlyRate, nextPayment),
+      );
     }
     if (monthAmortizations.length > 0) fixedPayment = nextPayment;
     else if (repricePayment) fixedPayment = scheduledPayment;

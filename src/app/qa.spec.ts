@@ -439,6 +439,95 @@ describe('QA: gestión de escenarios', () => {
     vi.unstubAllGlobals();
   });
 
+  it('confirma antes de sustituir ofertas al importar y limpia el selector', async () => {
+    const workspace = createWorkspace();
+    const existing = offer({ id: 'actual', name: 'Actual' });
+    const imported = offer({ id: 'importada', name: 'Importada' });
+    workspace.mortgages.set([existing]);
+    const confirmImport = vi.fn(() => true);
+    vi.stubGlobal('confirm', confirmImport);
+    const input = document.createElement('input');
+    Object.defineProperty(input, 'files', {
+      value: [
+        new File([JSON.stringify({ schemaVersion: 2, mortgages: [imported] })], 'datos.json'),
+      ],
+    });
+
+    await workspace.importData({ target: input } as unknown as Event);
+
+    expect(confirmImport).toHaveBeenCalledWith(
+      'Importar sustituirá tus 1 ofertas actuales. ¿Continuar?',
+    );
+    expect(workspace.mortgages()).toEqual([imported]);
+    expect(input.value).toBe('');
+  });
+
+  it('conserva las ofertas y comunica la cancelación de una importación', async () => {
+    const workspace = createWorkspace();
+    const existing = offer({ id: 'actual', name: 'Actual' });
+    const imported = offer({ id: 'importada', name: 'Importada' });
+    workspace.mortgages.set([existing]);
+    vi.stubGlobal('confirm', () => false);
+    const input = document.createElement('input');
+    Object.defineProperty(input, 'files', {
+      value: [
+        new File([JSON.stringify({ schemaVersion: 2, mortgages: [imported] })], 'datos.json'),
+      ],
+    });
+
+    await workspace.importData({ target: input } as unknown as Event);
+
+    expect(workspace.mortgages()).toEqual([existing]);
+    expect(workspace.status()).toBe('Importación cancelada.');
+    expect(input.value).toBe('');
+  });
+
+  it('importa sin preguntar cuando no existen ofertas actuales', async () => {
+    const workspace = createWorkspace();
+    const imported = offer({ id: 'importada', name: 'Importada' });
+    const confirmImport = vi.fn(() => true);
+    vi.stubGlobal('confirm', confirmImport);
+    const input = document.createElement('input');
+    Object.defineProperty(input, 'files', {
+      value: [
+        new File([JSON.stringify({ schemaVersion: 2, mortgages: [imported] })], 'datos.json'),
+      ],
+    });
+
+    await workspace.importData({ target: input } as unknown as Event);
+
+    expect(confirmImport).not.toHaveBeenCalled();
+    expect(workspace.mortgages()).toEqual([imported]);
+    expect(workspace.status()).toBe('Importación completada.');
+  });
+
+  it('rechaza un archivo inválido sin pedir confirmación', async () => {
+    const workspace = createWorkspace();
+    workspace.mortgages.set([offer({ id: 'actual', name: 'Actual' })]);
+    const confirmImport = vi.fn(() => true);
+    vi.stubGlobal('confirm', confirmImport);
+    const input = document.createElement('input');
+    Object.defineProperty(input, 'files', {
+      value: [
+        new File(
+          [
+            JSON.stringify({
+              schemaVersion: 2,
+              mortgages: [offer({ id: 'inválida', years: 200 })],
+            }),
+          ],
+          'datos.json',
+        ),
+      ],
+    });
+
+    await workspace.importData({ target: input } as unknown as Event);
+
+    expect(confirmImport).not.toHaveBeenCalled();
+    expect(workspace.status()).toContain('No se pudo importar');
+    expect(input.value).toBe('');
+  });
+
   it('crea una hipoteca nueva con un único escenario Base', () => {
     const workspace = createWorkspace();
 

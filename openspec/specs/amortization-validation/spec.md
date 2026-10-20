@@ -46,11 +46,19 @@ El sistema SHALL rechazar una amortización cuyo mes sea posterior al fin de la 
 - **THEN** el sistema la rechaza con «La hipoteca ya está cancelada o termina antes del mes 70.»
 
 ### Requirement: Revalidación en cadena
-El sistema SHALL volver a validar todas las amortizaciones puntuales de un escenario cada vez que se añada, edite o elimine una amortización, bonificación o cantidad mensual, y SHALL rechazar el cambio si deja alguna por encima del capital restante.
+El sistema SHALL volver a validar todas las amortizaciones puntuales de un escenario cada vez que se añada, edite, elimine o active una amortización, bonificación, cantidad mensual o modo de amortización, y SHALL rechazar el cambio restaurando el valor anterior si deja alguna por encima del capital restante.
 
 #### Scenario: Cambio que invalida una posterior
 - **WHEN** existe una cancelación total en el mes 100 y el usuario añade una amortización en el mes 50 que reduce el saldo
 - **THEN** el sistema rechaza el cambio con «Este cambio dejaría la amortización del mes 100 por encima del capital restante.»
+
+#### Scenario: Cambio que invalida una amortización posterior
+- **WHEN** existe una cancelación total en el mes 100 y activar la cantidad mensual o cambiar el modo deja esa amortización por encima del capital restante
+- **THEN** el sistema no aplica el cambio, muestra «Este cambio dejaría la amortización del mes 100 por encima del capital restante» y restaura el control
+
+#### Scenario: Edición intermedia del importe mensual
+- **WHEN** el usuario vacía temporalmente el campo de cantidad mensual para escribir otro importe
+- **THEN** el sistema permite el estado intermedio y reserva los errores del campo para la validación al guardar, siempre que no invalide una amortización puntual
 
 ### Requirement: Validación al importar y al cargar
 El sistema SHALL tratar como inválido un escenario con una amortización puntual mayor que el capital restante al importar un archivo o cargar de `localStorage`, indicando el nombre de la hipoteca y del escenario.

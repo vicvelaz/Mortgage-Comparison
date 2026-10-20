@@ -8,6 +8,7 @@ import {
   MonthlyBudget,
   Scenario,
   createId,
+  maxAmortizableAt,
 } from './mortgage-calculator';
 import { validateCancellationFees, validateMortgage } from './mortgage-validation';
 
@@ -27,6 +28,22 @@ export type StorageLike = Pick<Storage, 'getItem' | 'setItem'>;
 interface StoredEnvelope {
   schemaVersion: 1 | 2;
   mortgages: unknown[];
+}
+
+interface LegacyAmortizationChange {
+  mortgageName: string;
+  amortizationName: string;
+  kind: 'adjusted' | 'deactivated';
+  amount?: number;
+}
+
+interface StoredMortgagesResult {
+  ok: true;
+  mortgages: Mortgage[];
+  total: number;
+  rejected: number;
+  rejectedNames: string[];
+  legacyChanges: LegacyAmortizationChange[];
 }
 
 export function serializeMortgages(mortgages: Mortgage[]): string {
@@ -91,16 +108,9 @@ export function loadMortgages(storage: StorageLike, now: number = Date.now()): L
       notice: 'Los datos v1 se leyeron, pero no se pudo guardar la migración a v2.',
     };
   }
-  if (migrated.rejected > 0) {
-    const noun = migrated.total === 1 ? 'oferta' : 'ofertas';
-    return {
-      mortgages: migrated.mortgages,
-      notice: `Se recuperaron ${migrated.mortgages.length} de ${migrated.total} ${noun}. Se guardó una copia de seguridad.`,
-    };
-  }
   return {
     mortgages: migrated.mortgages,
-    notice: 'Datos migrados a v2. Se guardó una copia de seguridad.',
+    notice: migrationNotice(migrated),
   };
 }
 
@@ -139,20 +149,39 @@ function loadCurrentVersion(storage: StorageLike, raw: string, now: number): Loa
 function parseStoredMortgages(
   raw: string,
   now: number,
-): { ok: true; mortgages: Mortgage[]; total: number; rejected: number } | { ok: false } {
+): StoredMortgagesResult | { ok: false } {
   const envelope = parseEnvelope(raw);
   if (!envelope.ok) return { ok: false };
 
   const total = envelope.value.mortgages.length;
   const mortgages: Mortgage[] = [];
   const seenIds = new Set<string>();
+  const rejectedNames: string[] = [];
+  const legacyChanges: LegacyAmortizationChange[] = [];
   for (const [index, item] of envelope.value.mortgages.entries()) {
     const result = parseMortgage(item, index, envelope.value.schemaVersion, now);
-    if (!result.ok || seenIds.has(result.value.id)) continue;
+    if (!result.ok) {
+      rejectedNames.push(mortgageLabel(item, index));
+      continue;
+    }
+    if (seenIds.has(result.value.id)) {
+      rejectedNames.push(mortgageLabel(item, index));
+      continue;
+    }
     seenIds.add(result.value.id);
     mortgages.push(result.value);
+    if (envelope.value.schemaVersion === 1) {
+      legacyChanges.push(...legacyAmortizationChanges(item, result.value));
+    }
   }
-  return { ok: true, mortgages, total, rejected: total - mortgages.length };
+  return {
+    ok: true,
+    mortgages,
+    total,
+    rejected: total - mortgages.length,
+    rejectedNames,
+    legacyChanges,
+  };
 }
 
 function parseEnvelope(text: string): ParseResult<StoredEnvelope> {
@@ -251,8 +280,112 @@ function parseMortgage(
     updatedAt:
       typeof value['updatedAt'] === 'string' ? value['updatedAt'] : new Date(now).toISOString(),
   };
+  if (schemaVersion === 1) repairLegacyAmortizations(candidate);
   const error = validateMortgage(candidate);
   return error ? invalid(error) : { ok: true, value: candidate };
+}
+
+function repairLegacyAmortizations(mortgage: Mortgage): void {
+  for (const scenario of mortgage.scenarios) {
+    const singles = scenario.amortizations
+      .map((item, index) => ({ item, index }))
+      .filter(({ item }) => item.active && item.type === 'single')
+      .sort((left, right) => left.item.month - right.item.month || left.index - right.index);
+    const acceptedIndexes = new Set<number>();
+
+    for (const { item, index } of singles) {
+      const precedingScenario: Scenario = {
+        ...scenario,
+        amortizations: scenario.amortizations.map((candidate, candidateIndex) => ({
+          ...candidate,
+          active:
+            candidate.active &&
+            (candidate.type === 'recurring' || acceptedIndexes.has(candidateIndex)),
+        })),
+      };
+      const maximumCents = maxAmortizableAt(mortgage, precedingScenario, item.month);
+      if (maximumCents === 0) {
+        scenario.amortizations[index] = { ...item, active: false };
+        continue;
+      }
+      const requestedCents = Math.round(item.amount * 100);
+      if (requestedCents > maximumCents) {
+        scenario.amortizations[index] = { ...item, amount: maximumCents / 100 };
+      }
+      acceptedIndexes.add(index);
+    }
+  }
+}
+
+function legacyAmortizationChanges(
+  value: unknown,
+  mortgage: Mortgage,
+): LegacyAmortizationChange[] {
+  if (!isRecord(value) || !Array.isArray(value['amortizations'])) return [];
+  const rawAmortizations = value['amortizations'];
+  const migratedAmortizations = mortgage.scenarios[0]?.amortizations ?? [];
+  const changes: LegacyAmortizationChange[] = [];
+
+  for (const [index, raw] of rawAmortizations.entries()) {
+    if (!isRecord(raw)) continue;
+    const migrated = migratedAmortizations[index];
+    if (!migrated || raw['active'] === false) continue;
+    if (!migrated.active) {
+      changes.push({
+        mortgageName: mortgage.name,
+        amortizationName: migrated.name,
+        kind: 'deactivated',
+      });
+    } else if (typeof raw['amount'] === 'number' && migrated.amount < raw['amount']) {
+      changes.push({
+        mortgageName: mortgage.name,
+        amortizationName: migrated.name,
+        kind: 'adjusted',
+        amount: migrated.amount,
+      });
+    }
+  }
+  return changes;
+}
+
+function migrationNotice(result: StoredMortgagesResult): string {
+  const parts: string[] = [];
+  const migratedWord = result.mortgages.length === 1 ? 'oferta' : 'ofertas';
+  const migratedVerb = result.mortgages.length === 1 ? 'Se migró' : 'Se migraron';
+  parts.push(`${migratedVerb} ${result.mortgages.length} ${migratedWord}.`);
+  if (result.rejected > 0) {
+    const discardedWord = result.rejected === 1 ? 'oferta' : 'ofertas';
+    const discardedVerb = result.rejected === 1 ? 'Se descartó' : 'Se descartaron';
+    const names = result.rejectedNames.map((name) => `«${name}»`).join(', ');
+    parts.push(
+      `${discardedVerb} ${result.rejected} ${discardedWord}${names ? `: ${names}` : ''}.`,
+    );
+  }
+  const currency = new Intl.NumberFormat('es-ES', {
+    style: 'currency',
+    currency: 'EUR',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+  for (const change of result.legacyChanges) {
+    if (change.kind === 'adjusted') {
+      parts.push(
+        `Se ajustó la amortización «${change.amortizationName}» de «${change.mortgageName}» al capital restante (${currency.format(change.amount ?? 0)}).`,
+      );
+    } else {
+      parts.push(
+        `Se desactivó la amortización «${change.amortizationName}» de «${change.mortgageName}» porque caía tras la cancelación o fuera del plazo.`,
+      );
+    }
+  }
+  parts.push('Se guardó una copia de seguridad.');
+  return parts.join(' ');
+}
+
+function mortgageLabel(value: unknown, position: number): string {
+  return isRecord(value) && typeof value['name'] === 'string' && value['name'].trim()
+    ? value['name'].trim()
+    : `#${position + 1}`;
 }
 
 function parseCancellationFees(value: unknown): ParseResult<CancellationFees> {

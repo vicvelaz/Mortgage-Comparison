@@ -201,6 +201,7 @@ export class Workspace implements AfterViewInit, OnDestroy {
   readonly lowestRelativeCost = computed(
     () =>
       this.selectedResults()
+        .filter((item) => !this.hasUnpaidBalance(item))
         .map((item) => ({ ...item, relativeCost: this.relativeCost(item) }))
         .sort((left, right) => left.relativeCost - right.relativeCost)[0] ?? null,
   );
@@ -400,9 +401,14 @@ export class Workspace implements AfterViewInit, OnDestroy {
 
   selectedLowest(key: ResultKey): ScenarioResult | null {
     return (
-      [...this.selectedResults()].sort((left, right) => left.result[key] - right.result[key])[0] ??
-      null
+      [...this.selectedResults()]
+        .filter((item) => !this.hasUnpaidBalance(item))
+        .sort((left, right) => left.result[key] - right.result[key])[0] ?? null
     );
+  }
+
+  hasUnpaidBalance(item: ScenarioResult): boolean {
+    return Math.round(item.result.remainingCapital * 100) > 1;
   }
 
   markerColor(mortgageId: string, scenarioId: string): string {
@@ -486,8 +492,9 @@ export class Workspace implements AfterViewInit, OnDestroy {
 
   private lowest(key: ResultKey): ScenarioResult | null {
     return (
-      [...this.mortgageResults()].sort((left, right) => left.result[key] - right.result[key])[0] ??
-      null
+      [...this.mortgageResults()]
+        .filter((item) => !this.hasUnpaidBalance(item))
+        .sort((left, right) => left.result[key] - right.result[key])[0] ?? null
     );
   }
 

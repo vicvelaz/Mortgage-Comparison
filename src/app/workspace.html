@@ -188,7 +188,11 @@
                 ></span>
                 <span class="selection-name"
                   ><strong>{{ item.mortgage.name }} · {{ item.scenario.name }}</strong
-                  ><small>{{ item.mortgage.bank }}</small></span
+                  ><small>{{ item.mortgage.bank }}</small>
+                  @if (hasUnpaidBalance(item)) {
+                    <small class="row-warning">No se cancela dentro del plazo</small>
+                  }
+                </span
                 >
                 <span class="selection-rate"
                   >{{ item.mortgage.interestRate | number: '1.2-2' }}%</span
@@ -367,7 +371,11 @@
                 ></span
                 ><span class="selection-name"
                   ><strong>{{ item.mortgage.name }} · {{ item.scenario.name }}</strong
-                  ><small>{{ item.mortgage.bank }}</small></span
+                  ><small>{{ item.mortgage.bank }}</small>
+                  @if (hasUnpaidBalance(item)) {
+                    <small class="row-warning">No se cancela dentro del plazo</small>
+                  }
+                </span
                 ><span class="picker-amount">{{ currency(item.mortgage.amount) }}</span>
               </div>
             } @empty {
@@ -461,6 +469,9 @@
                     <tr>
                       <td>
                         <strong>{{ item.mortgage.name }} · {{ item.scenario.name }}</strong>
+                        @if (hasUnpaidBalance(item)) {
+                          <small class="row-warning">No se cancela dentro del plazo</small>
+                        }
                       </td>
                       <td
                         [class.positive-value]="item.interestSavings >= 0"

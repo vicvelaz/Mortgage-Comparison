@@ -600,21 +600,25 @@ describe('App', () => {
       amount: balanceCents / 100,
       month,
     });
+    const earlier = createAmortization({ id: 'earlier', amount: 1000, month: 12 });
     const scenario = { ...original, amortizations: [later] };
+    const maximumAfterEarlier = maxAmortizableAt(mortgage, {
+      ...scenario,
+      amortizations: [earlier],
+    }, month);
 
     expect(
       validateScenario(
         mortgage,
         {
           ...scenario,
-          amortizations: [
-            ...scenario.amortizations,
-            createAmortization({ id: 'earlier', amount: 1000, month: 12 }),
-          ],
+          amortizations: [...scenario.amortizations, earlier],
         },
-        'earlier',
+        { changedAmortizationId: 'earlier' },
       ),
-    ).toBe(`Este cambio dejaría la amortización del mes ${month} por encima del capital restante.`);
+    ).toBe(
+      `Este cambio dejaría la amortización del mes ${month} por encima del capital restante (máximo ${new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(maximumAfterEarlier / 100)}).`,
+    );
   });
 
   it('rejects an amortization one cent above the exact remaining balance', () => {
@@ -632,7 +636,7 @@ describe('App', () => {
             createAmortization({ id: 'too-much', amount: (balanceCents + 1) / 100, month }),
           ],
         },
-        'too-much',
+        { changedAmortizationId: 'too-much' },
       ),
     ).toBe(
       `No puedes amortizar más de lo que queda por pagar. Capital restante en el mes ${month}: ${new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(balanceCents / 100)}.`,

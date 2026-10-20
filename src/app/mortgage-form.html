@@ -106,7 +106,7 @@
             min="0.01"
             step="1"
             [value]="monthlyBudget.amount"
-            (input)="setMonthlyBudgetField('amount', $event)"
+            (change)="setMonthlyBudgetField('amount', $event)"
           /><span>€</span>
         </div></label
       >
@@ -148,7 +148,9 @@
   </label>
   <p class="field-hint">
     Reducir cuota recalcula el pago mensual y mantiene el plazo. Reducir plazo mantiene la cuota
-    ordinaria y termina antes; si cambia el tipo de interés, la cuota se vuelve a calcular.
+    ordinaria y termina antes. Si cambia el tipo de interés, la cuota se recalcula en ambos modos.
+    Con la misma cantidad mensual dedicada, ambos modos tienen el mismo coste total y plazo; solo
+    cambia el reparto entre cuota ordinaria y amortización extra.
   </p>
 
   <div class="editor-divider"></div>

@@ -14,9 +14,11 @@ import {
   maxAmortizableAt,
 } from './mortgage-calculator';
 import {
+  ScenarioValidationOptions,
   validateAmortization,
   validateBonus,
   validateCancellationFees,
+  validateMonthlyBudget,
   validateMortgage,
   validateScenario,
 } from './mortgage-validation';
@@ -204,18 +206,27 @@ export class MortgageFormComponent {
 
   setMonthlyBudgetEnabled(event: Event): void {
     if (!(event.currentTarget instanceof HTMLInputElement)) return;
-    const enabled = event.currentTarget.checked;
-    this.replaceScenario({
+    const input = event.currentTarget;
+    const wasEnabled = Boolean(this.scenario.monthlyBudget);
+    const enabled = input.checked;
+    const candidate = {
       ...this.scenario,
       ...(enabled
         ? { monthlyBudget: { amount: 1000, startMonth: 1 } }
         : { monthlyBudget: undefined }),
-    });
+    };
+    if (!this.updateScenario(candidate, { messageContext: 'scenario-change' })) {
+      input.checked = wasEnabled;
+    }
   }
 
   setMonthlyBudgetField(field: 'amount' | 'startMonth' | 'endMonth', event: Event): void {
     if (!(event.currentTarget instanceof HTMLInputElement) || !this.scenario.monthlyBudget) return;
     const input = event.currentTarget;
+    const previousValue =
+      field === 'endMonth'
+        ? (this.scenario.monthlyBudget.endMonth?.toString() ?? '')
+        : this.scenario.monthlyBudget[field].toString();
     const value = input.valueAsNumber;
     const monthlyBudget = { ...this.scenario.monthlyBudget };
     if (field === 'amount') monthlyBudget.amount = Number.isFinite(value) ? value : 0;
@@ -224,14 +235,24 @@ export class MortgageFormComponent {
       if (input.value === '') delete monthlyBudget.endMonth;
       else monthlyBudget.endMonth = Number.isFinite(value) ? value : 0;
     }
-    this.replaceScenario({ ...this.scenario, monthlyBudget });
+    const candidate = { ...this.scenario, monthlyBudget };
+    if (validateMonthlyBudget(monthlyBudget)) {
+      this.replaceScenario(candidate);
+      return;
+    }
+    if (!this.updateScenario(candidate, { messageContext: 'scenario-change' })) {
+      input.value = previousValue;
+    }
   }
 
   setAmortizationMode(event: Event): void {
     if (!(event.currentTarget instanceof HTMLSelectElement)) return;
     const mode = event.currentTarget.value;
     if (mode !== 'reduceInstallment' && mode !== 'reduceTerm') return;
-    this.replaceScenario({ ...this.scenario, mode });
+    const previousMode = this.scenario.mode;
+    if (!this.updateScenario({ ...this.scenario, mode }, { messageContext: 'scenario-change' })) {
+      event.currentTarget.value = previousMode;
+    }
   }
 
   maxAmortizableAmount(): number {
@@ -272,7 +293,7 @@ export class MortgageFormComponent {
       ...this.scenario,
       amortizations: [...this.scenario.amortizations, added],
     };
-    if (!this.updateScenario(candidate, added.id)) return;
+    if (!this.updateScenario(candidate, { changedAmortizationId: added.id })) return;
     if (item.month > this.draft.years * 12) {
       this.notify.emit(
         `La amortización cae en el mes ${item.month}, fuera del plazo de la hipoteca; no tendrá efecto.`,
@@ -295,16 +316,14 @@ export class MortgageFormComponent {
         item.id === id ? { ...item, active } : item,
       ),
     };
-    const error = validateScenario(this.draft, candidate, active ? id : undefined);
-    if (error) {
-      this.notify.emit(error);
-      return;
-    }
-    this.updateScenario(candidate, active ? id : undefined);
+    this.updateScenario(candidate, active ? { changedAmortizationId: id } : {});
   }
 
-  private updateScenario(candidate: Scenario, changedId?: string): boolean {
-    const error = validateScenario(this.draft, candidate, changedId);
+  private updateScenario(
+    candidate: Scenario,
+    options: ScenarioValidationOptions = {},
+  ): boolean {
+    const error = validateScenario(this.draft, candidate, options);
     if (error) {
       this.notify.emit(error);
       return false;

@@ -10,6 +10,7 @@ import {
   Mortgage,
   Scenario,
   calculateMortgage as calculateScenario,
+  maxAmortizableAt,
   relativeCostPer100,
 } from './mortgage-calculator';
 
@@ -247,6 +248,186 @@ describe('QA: comparador de ofertas no comparables (F3)', () => {
   });
 });
 
+describe('QA: revalidación en cadena de cantidades mensuales', () => {
+  beforeEach(() => {
+    localStorage.clear();
+    TestBed.configureTestingModule({ imports: [Workspace], providers: [provideRouter(routes)] });
+  });
+
+  afterEach(() => localStorage.clear());
+
+  function addCancellationAtMonth100(mortgage: Mortgage): Mortgage {
+    const scenario = mortgage.scenarios[0];
+    const amount = maxAmortizableAt(mortgage, scenario, 100) / 100;
+    scenario.amortizations = [
+      {
+        id: 'cancellation',
+        name: 'Cancelación total',
+        active: true,
+        type: 'single',
+        reductionType: 'payment',
+        amount,
+        month: 100,
+      },
+    ];
+    return mortgage;
+  }
+
+  it('rejects enabling a budget that invalidates a month-100 cancellation and unchecks the control', () => {
+    const fixture = TestBed.createComponent(Workspace);
+    const workspace = fixture.componentInstance;
+    const mortgage = addCancellationAtMonth100(offer());
+    workspace.draft = mortgage;
+    workspace.selectedScenarioId.set(mortgage.scenarios[0].id);
+    workspace.activeView.set('mortgages');
+    fixture.detectChanges();
+
+    const enabled = fixture.nativeElement.querySelector(
+      'input[name="monthlyBudgetEnabled"]',
+    ) as HTMLInputElement;
+    enabled.checked = true;
+    enabled.dispatchEvent(new Event('change', { bubbles: true }));
+    fixture.detectChanges();
+
+    expect(workspace.activeScenario()?.monthlyBudget).toBeUndefined();
+    expect(enabled.checked).toBe(false);
+    expect(workspace.status()).toContain(
+      'Este cambio dejaría la amortización del mes 100 por encima del capital restante',
+    );
+  });
+
+  it('rejects a monthly amount that invalidates a cancellation and restores the input value', () => {
+    const fixture = TestBed.createComponent(Workspace);
+    const workspace = fixture.componentInstance;
+    const mortgage = addCancellationAtMonth100(offer());
+    mortgage.scenarios[0].monthlyBudget = { amount: 1, startMonth: 1 };
+    workspace.draft = mortgage;
+    workspace.selectedScenarioId.set(mortgage.scenarios[0].id);
+    workspace.activeView.set('mortgages');
+    fixture.detectChanges();
+
+    const amount = fixture.nativeElement.querySelector(
+      'input[name="monthlyBudgetAmount"]',
+    ) as HTMLInputElement;
+    amount.value = '1000';
+    amount.dispatchEvent(new Event('change', { bubbles: true }));
+    fixture.detectChanges();
+
+    expect(workspace.activeScenario()?.monthlyBudget?.amount).toBe(1);
+    expect(amount.value).toBe('1');
+    expect(workspace.status()).toContain('Este cambio dejaría la amortización del mes 100');
+  });
+
+  it('rejects a mode change that invalidates a cancellation and restores the select', () => {
+    const mortgage = offer({
+      amount: 100000,
+      years: 20,
+      interestRate: 4,
+      cancellationFees: { partial: [{ fromMonth: 1, percent: 50 }], total: [] },
+    });
+    const scenario = mortgage.scenarios[0];
+    const settings = [
+      { amount: 600, endMonth: 12 },
+      { amount: 800, endMonth: 24 },
+      { amount: 1200, endMonth: 36 },
+      { amount: 1600, endMonth: 60 },
+    ];
+    const differentBalances = settings
+      .map((budget) => {
+        const installment = {
+          ...scenario,
+          mode: 'reduceInstallment' as const,
+          monthlyBudget: { ...budget, startMonth: 1 },
+        };
+        const term = {
+          ...scenario,
+          mode: 'reduceTerm' as const,
+          monthlyBudget: { ...budget, startMonth: 1 },
+        };
+        return {
+          installment,
+          term,
+          installmentBalance: maxAmortizableAt(mortgage, installment, 100),
+          termBalance: maxAmortizableAt(mortgage, term, 100),
+        };
+      })
+      .find((item) => item.installmentBalance !== item.termBalance)!;
+    const initialScenario =
+      differentBalances.installmentBalance > differentBalances.termBalance
+        ? differentBalances.installment
+        : differentBalances.term;
+    const nextMode = initialScenario.mode === 'reduceTerm' ? 'reduceInstallment' : 'reduceTerm';
+    mortgage.scenarios[0] = {
+      ...initialScenario,
+      amortizations: [
+        {
+          id: 'cancellation',
+          name: 'Cancelación total',
+          active: true,
+          type: 'single',
+          reductionType: 'payment',
+          amount:
+            Math.max(differentBalances.installmentBalance, differentBalances.termBalance) / 100,
+          month: 100,
+        },
+      ],
+    };
+    const fixture = TestBed.createComponent(Workspace);
+    const workspace = fixture.componentInstance;
+    workspace.draft = mortgage;
+    workspace.selectedScenarioId.set(mortgage.scenarios[0].id);
+    workspace.activeView.set('mortgages');
+    fixture.detectChanges();
+
+    const mode = fixture.nativeElement.querySelector(
+      'select[name="scenarioAmortizationMode"]',
+    ) as HTMLSelectElement;
+    mode.value = nextMode;
+    mode.dispatchEvent(new Event('change', { bubbles: true }));
+    fixture.detectChanges();
+
+    expect(workspace.activeScenario()?.mode).toBe(initialScenario.mode);
+    expect(mode.value).toBe(initialScenario.mode);
+    expect(workspace.status()).toContain('Este cambio dejaría la amortización del mes 100');
+  });
+
+  it('allows a temporarily empty monthly amount and accepts a valid replacement', () => {
+    const fixture = TestBed.createComponent(Workspace);
+    const workspace = fixture.componentInstance;
+    const mortgage = offer();
+    mortgage.scenarios[0].monthlyBudget = { amount: 1000, startMonth: 1 };
+    workspace.draft = mortgage;
+    workspace.selectedScenarioId.set(mortgage.scenarios[0].id);
+    workspace.activeView.set('mortgages');
+    fixture.detectChanges();
+
+    const amount = fixture.nativeElement.querySelector(
+      'input[name="monthlyBudgetAmount"]',
+    ) as HTMLInputElement;
+    amount.value = '';
+    amount.dispatchEvent(new Event('change', { bubbles: true }));
+    fixture.detectChanges();
+    expect(workspace.activeScenario()?.monthlyBudget?.amount).toBe(0);
+
+    amount.value = '800';
+    amount.dispatchEvent(new Event('change', { bubbles: true }));
+    fixture.detectChanges();
+    expect(workspace.activeScenario()?.monthlyBudget?.amount).toBe(800);
+    expect(amount.value).toBe('800');
+  });
+
+  it('keeps saveMortgage as a final validation guard for invalid budget fields', () => {
+    const workspace = createWorkspace();
+    workspace.draft = offer();
+    workspace.draft.scenarios[0].monthlyBudget = { amount: 0, startMonth: 1 };
+
+    workspace.saveMortgage();
+
+    expect(workspace.mortgages()).toEqual([]);
+    expect(workspace.status()).toContain('debe ser un número mayor que 0');
+  });
+});
+
 describe('QA: gestión de escenarios', () => {
   beforeEach(() => {
     localStorage.clear();
@@ -306,6 +487,9 @@ describe('QA: gestión de escenarios', () => {
     expect(workspace.activeScenario()?.mode).toBe('reduceTerm');
     expect(fixture.nativeElement.querySelector('.mortgage-editor').textContent).toContain(
       'Reducir plazo mantiene la cuota ordinaria',
+    );
+    expect(fixture.nativeElement.querySelector('.mortgage-editor').textContent).toContain(
+      'ambos modos tienen el mismo coste total y plazo',
     );
   });
 

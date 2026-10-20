@@ -1,0 +1,4 @@
+schema: spec-driven
+created: 2026-10-20
+goal: Mantener cuotas coherentes, rechazar cambios que invaliden amortizaciones
+  y reparar amortizaciones legadas sin perder ofertas

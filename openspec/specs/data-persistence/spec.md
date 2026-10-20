@@ -13,7 +13,7 @@ El sistema SHALL guardar los datos en `localStorage` con la clave `hipoteca-comp
 - **THEN** el contenido de `hipoteca-comparador-v2` incluye `schemaVersion: 2` y la hipoteca con sus escenarios
 
 ### Requirement: Migración automática desde v1
-El sistema SHALL migrar los datos de `hipoteca-comparador-v1` al arrancar si existe v1 y no existe v2, convirtiendo cada hipoteca en una con un único escenario «Base» que conserva sus bonificaciones y amortizaciones.
+El sistema SHALL migrar `hipoteca-comparador-v1` al arrancar si no existe v2, convirtiendo cada hipoteca en un escenario «Base» y reparando amortizaciones puntuales activas que excedan el saldo o queden tras la cancelación/fuera del plazo. SHALL conservar el backup y la clave v1, informar de ajustes y descartes, y mantener estricta la carga e importación v2.
 
 #### Scenario: Resultados idénticos tras migrar
 - **WHEN** existen hipotecas v1 con bonificaciones y amortizaciones y se migran
@@ -22,6 +22,18 @@ El sistema SHALL migrar los datos de `hipoteca-comparador-v1` al arrancar si exi
 #### Scenario: Copia de seguridad previa
 - **WHEN** se ejecuta la migración
 - **THEN** el texto original de v1 se copia en `hipoteca-comparador-v1-backup` y la clave v1 no se borra
+
+#### Scenario: Oferta v1 con amortización excesiva
+- **WHEN** una oferta v1 tiene una amortización puntual mayor que el capital restante
+- **THEN** la oferta se migra con la amortización ajustada al capital restante y el aviso la menciona por nombre de oferta y amortización
+
+#### Scenario: Amortización v1 posterior a la cancelación
+- **WHEN** una oferta v1 tiene una amortización puntual después de que otra amortización haya cancelado la hipoteca
+- **THEN** la amortización posterior queda desactivada y la oferta se conserva
+
+#### Scenario: Amortización excesiva en v2
+- **WHEN** se cargan o importan datos v2 con una amortización puntual excesiva
+- **THEN** los datos se rechazan sin reparación automática
 
 ### Requirement: Carga tolerante a registros inválidos
 El sistema SHALL cargar las hipotecas válidas y descartar solo las inválidas, guardando una copia del texto original antes de poder sobrescribirlo y avisando al usuario.

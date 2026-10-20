@@ -101,4 +101,70 @@ describe('scenario comparison', () => {
     expect(labels[0]).toBe(1);
     expect(labels.at(-1)).toBe(360);
   });
+
+  it('warns about and excludes a schedule with unpaid capital from every best-offer KPI', () => {
+    const unpaidMortgage = mortgage('unpaid', 1, [
+      {
+        ...scenario('unpaid-base', 'Saldo pendiente', [
+          {
+            id: 'extra',
+            name: 'Extra',
+            active: true,
+            type: 'single',
+            reductionType: 'payment',
+            amount: 1,
+            month: 1,
+          },
+        ]),
+        bonuses: [
+          {
+            id: 'temporary',
+            name: 'Bono temporal',
+            active: true,
+            interestReduction: 100,
+            annualCost: 0,
+            startMonth: 1,
+            endMonth: 1,
+          },
+        ],
+      },
+    ], 10000);
+    unpaidMortgage.interestRate = 100;
+    const paidMortgage = mortgage('paid', 1, [scenario('paid-base', 'Cancelada')], 10000);
+    paidMortgage.interestRate = 0;
+    const fixture = TestBed.createComponent(Workspace);
+    const workspace = fixture.componentInstance;
+    workspace.mortgages.set([unpaidMortgage, paidMortgage]);
+    const unpaidResult = calculateMortgage(unpaidMortgage, unpaidMortgage.scenarios[0]);
+    Object.defineProperty(workspace, 'mortgageResults', {
+      configurable: true,
+      value: () => [
+        {
+          mortgage: unpaidMortgage,
+          scenario: unpaidMortgage.scenarios[0],
+          result: { ...unpaidResult, remainingCapital: 100 },
+        },
+        {
+          mortgage: paidMortgage,
+          scenario: paidMortgage.scenarios[0],
+          result: calculateMortgage(paidMortgage, paidMortgage.scenarios[0]),
+        },
+      ],
+    });
+    workspace.selectedIds.set([
+      JSON.stringify(['unpaid', 'unpaid-base']),
+      JSON.stringify(['paid', 'paid-base']),
+    ]);
+    fixture.detectChanges();
+
+    expect(workspace.mortgageResults()[0].result.remainingCapital).toBeGreaterThan(0.01);
+    expect(workspace.cheapest()?.mortgage.id).toBe('paid');
+    expect(workspace.smallestPayment()?.mortgage.id).toBe('paid');
+    expect(workspace.leastInterest()?.mortgage.id).toBe('paid');
+    expect(workspace.lowestRelativeCost()?.mortgage.id).toBe('paid');
+    expect(workspace.selectedLowest('totalCost')?.mortgage.id).toBe('paid');
+    expect(workspace.selectedLowest('firstPayment')?.mortgage.id).toBe('paid');
+    expect(workspace.selectedLowest('totalInterest')?.mortgage.id).toBe('paid');
+    expect(fixture.nativeElement.textContent).toContain('No se cancela dentro del plazo');
+  });
 });

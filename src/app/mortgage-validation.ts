@@ -37,6 +37,11 @@ export interface ScenarioFields {
   mode?: unknown;
 }
 
+export interface ScenarioValidationOptions {
+  changedAmortizationId?: string;
+  messageContext?: 'scenario-change';
+}
+
 export function validateMortgage(mortgage: MortgageFields): string | null {
   if (!text(mortgage.name)) return 'Indica un nombre para la oferta.';
   if (!text(mortgage.bank)) return 'Indica la entidad financiera.';
@@ -122,7 +127,7 @@ export function validateCancellationFees(value: unknown): string | null {
 export function validateScenario(
   mortgage: Mortgage,
   scenario: Scenario,
-  changedAmortizationId?: string,
+  options: ScenarioValidationOptions = {},
 ): string | null {
   if (
     scenario.mode !== undefined &&
@@ -158,14 +163,17 @@ export function validateScenario(
     const maximumCents = maxAmortizableAt(mortgage, precedingEvents, item.month, item.id);
     const requestedCents = moneyToCents(item.amount);
     if (maximumCents === 0 && requestedCents > 0) {
+      if (options.messageContext === 'scenario-change') {
+        return `Este cambio dejaría la amortización del mes ${item.month} por encima del capital restante (máximo ${formatEuros(maximumCents)}).`;
+      }
       return `La hipoteca ya está cancelada o termina antes del mes ${item.month}.`;
     }
     if (requestedCents > maximumCents) {
-      if (changedAmortizationId === item.id) {
+      if (options.changedAmortizationId === item.id) {
         return `No puedes amortizar más de lo que queda por pagar. Capital restante en el mes ${item.month}: ${formatEuros(maximumCents)}.`;
       }
-      if (changedAmortizationId) {
-        return `Este cambio dejaría la amortización del mes ${item.month} por encima del capital restante.`;
+      if (options.changedAmortizationId || options.messageContext === 'scenario-change') {
+        return `Este cambio dejaría la amortización del mes ${item.month} por encima del capital restante (máximo ${formatEuros(maximumCents)}).`;
       }
       return `La amortización del mes ${item.month} supera el capital restante (${formatEuros(maximumCents)}).`;
     }

@@ -186,6 +186,215 @@ describe('monthly budget amortization', () => {
     expect(result.rows[24].payment).toBeGreaterThan(result.rows[23].payment);
   });
 
+  it('reprices fixed reduce-installment payments after an amortization when the effective rate changes', () => {
+    const offer = mortgage({ amount: 180000, years: 25, interestRate: 4 });
+    const bonus = {
+      id: 'temporary',
+      name: 'Bonificación temporal',
+      active: true,
+      interestReduction: 1.5,
+      annualCost: 0,
+      startMonth: 1,
+      endMonth: 36,
+    };
+    const createScenario = (amount?: number): Scenario => ({
+      ...offer.scenarios[0],
+      bonuses: [bonus],
+      amortizations:
+        amount === undefined
+          ? []
+          : [
+              {
+                id: 'extra',
+                name: 'Extra',
+                active: true,
+                type: 'single',
+                reductionType: 'payment',
+                amount,
+                month: 12,
+              },
+            ],
+    });
+    const scenarios = [createScenario(), createScenario(1), createScenario(20000)];
+    const results = scenarios.map((scenario) => calculateMortgage(offer, scenario));
+
+    expect(results.map((result) => result.rows.length)).toEqual([300, 300, 300]);
+    expect(results[0].rows[35].payment).toBeCloseTo(807.51, 2);
+    expect(results[0].rows[36].payment).toBeCloseTo(934.23, 2);
+    expect(results[0].totalInterest).toBeCloseTo(95707.64, 2);
+    expect(results[0].totalCost).toBeCloseTo(275707.64, 2);
+    expect(results[0].remainingCapital).toBe(0);
+    expect(results[1].rows[35].payment).toBeCloseTo(807.51, 2);
+    expect(results[1].rows[36].payment).toBeCloseTo(934.23, 2);
+    expect(results[1].totalInterest).toBeCloseTo(95707.12, 2);
+    expect(results[1].totalCost).toBeCloseTo(275707.12, 2);
+    expect(results[1].remainingCapital).toBe(0);
+    expect(results[2].rows[35].payment).toBeCloseTo(715.09, 2);
+    expect(results[2].rows[36].payment).toBeCloseTo(827.31, 2);
+    expect(results[2].totalInterest).toBeCloseTo(85262.14, 2);
+    expect(results[2].totalCost).toBeCloseTo(265262.14, 2);
+    expect(results[2].remainingCapital).toBe(0);
+  });
+
+  it('reprices down when a later bonus starts after an amortization', () => {
+    const offer = mortgage({ amount: 180000, years: 25, interestRate: 4 });
+    const scenario: Scenario = {
+      ...offer.scenarios[0],
+      bonuses: [
+        {
+          id: 'later',
+          name: 'Bonificación posterior',
+          active: true,
+          interestReduction: 1,
+          annualCost: 0,
+          startMonth: 48,
+        },
+      ],
+      amortizations: [
+        {
+          id: 'extra',
+          name: 'Extra',
+          active: true,
+          type: 'single',
+          reductionType: 'payment',
+          amount: 15000,
+          month: 12,
+        },
+      ],
+    };
+    const result = calculateMortgage(offer, scenario);
+
+    expect(result.rows[46].payment).toBeCloseTo(869, 2);
+    expect(result.rows[47].payment).toBeCloseTo(792.04, 2);
+    expect(result.totalInterest).toBeCloseTo(77202.27, 2);
+    expect(result.remainingCapital).toBe(0);
+  });
+
+  it.each(['fixed', 'variable'] as const)(
+    'reprices in both modes for %s rates after an amortization',
+    (rateType) => {
+      for (const mode of ['reduceInstallment', 'reduceTerm'] as const) {
+        const offer = mortgage({
+          amount: 100000,
+          years: 5,
+          interestRate: 4,
+          rateType,
+        });
+        const scenario: Scenario = {
+          ...offer.scenarios[0],
+          mode,
+          bonuses: [
+            {
+              id: 'temporary',
+              name: 'Bonificación temporal',
+              active: true,
+              interestReduction: 1,
+              annualCost: 0,
+              startMonth: 24,
+              endMonth: 36,
+            },
+          ],
+          amortizations: [
+            {
+              id: 'extra',
+              name: 'Extra',
+              active: true,
+              type: 'single',
+              reductionType: 'payment',
+              amount: 5000,
+              month: 12,
+            },
+          ],
+        };
+        const result = calculateMortgage(offer, scenario);
+
+        expect(result.rows[23].payment).toBeLessThan(result.rows[22].payment);
+        expect(result.rows[36].payment).toBeGreaterThan(result.rows[35].payment);
+        expect(result.remainingCapital).toBe(0);
+      }
+    },
+  );
+
+  it('ends with zero capital for 500 deterministic schedules with rate windows and amortizations', () => {
+    let seed = 0x13579bdf;
+    const random = () => {
+      seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+      return seed / 0x100000000;
+    };
+
+    for (let index = 0; index < 500; index += 1) {
+      const years = 2 + Math.floor(random() * 28);
+      const amount = 30000 + Math.round(random() * 270000);
+      const months = years * 12;
+      const offer = mortgage({
+        amount,
+        years,
+        interestRate: 1 + random() * 5,
+        rateType: random() < 0.5 ? 'fixed' : 'variable',
+      });
+      const startMonth = 1 + Math.floor(random() * Math.floor(months / 2));
+      const endMonth = Math.min(months, startMonth + 1 + Math.floor(random() * 24));
+      const amortizationMonth = 1 + Math.floor(random() * Math.floor(months / 2));
+      const scenario: Scenario = {
+        ...offer.scenarios[0],
+        mode: random() < 0.5 ? 'reduceInstallment' : 'reduceTerm',
+        bonuses: [
+          {
+            id: `bonus-${index}`,
+            name: 'Bono aleatorio',
+            active: true,
+            interestReduction: 0.1 + random() * 1.5,
+            annualCost: 0,
+            startMonth,
+            endMonth,
+          },
+        ],
+        amortizations: [
+          {
+            id: `extra-${index}`,
+            name: 'Extra',
+            active: true,
+            type: index % 2 === 0 ? 'single' : 'recurring',
+            reductionType: index % 3 === 0 ? 'term' : 'payment',
+            amount: Math.max(1, Math.round(amount * 0.002)),
+            month: amortizationMonth,
+            ...(index % 2 === 0 ? {} : { frequencyMonths: 12 }),
+          },
+        ],
+      };
+      const result = calculateMortgage(offer, scenario);
+
+      expect(result.remainingCapital, `case ${index}`).toBe(0);
+      expect(result.rows.at(-1)?.remainingCapital, `case ${index}`).toBe(0);
+    }
+  });
+
+  it('preserves the 448-case no-event schedule grid', () => {
+    let checksum = 2166136261;
+    const amounts = [10000, 25000, 50000, 100000, 180000, 250000, 400000];
+    const terms = [1, 5, 10, 15, 20, 25, 30, 40];
+    const rates = [0, 0.5, 1, 1.5, 2, 2.5, 3, 4];
+
+    for (const amount of amounts) {
+      for (const years of terms) {
+        for (const interestRate of rates) {
+          const offer = mortgage({ amount, years, interestRate });
+          const result = calculateMortgage(offer, offer.scenarios[0]);
+          const serialized = JSON.stringify([
+            result.rows.map((row) => [row.payment, row.interest, row.principal, row.remainingCapital]),
+            result.totalInterest,
+            result.totalCost,
+          ]);
+          for (let index = 0; index < serialized.length; index += 1) {
+            checksum = Math.imul(checksum ^ serialized.charCodeAt(index), 16777619) >>> 0;
+          }
+        }
+      }
+    }
+
+    expect(checksum).toBe(3776448176);
+  });
+
   it('preserves the project reference values when no monthly budget is set', () => {
     const first = calculateMortgage(
       mortgage({ amount: 100000, years: 30, interestRate: 3 }),

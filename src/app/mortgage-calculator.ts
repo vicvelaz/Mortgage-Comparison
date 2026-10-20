@@ -205,14 +205,16 @@ function calculateSchedule(
     const interest = remaining * monthlyRate;
     const monthsLeft = plannedMonths - month + 1;
     const rateChanged = previousMonthlyRate !== null && monthlyRate !== previousMonthlyRate;
-    const repricePayment =
-      rateChanged && (mortgage.rateType === 'variable' || scenario.mode === 'reduceTerm');
-    const scheduledPayment = Math.min(
-      remaining + interest,
-      fixedPayment === null || repricePayment
-        ? monthlyPayment(remaining, monthlyRate, monthsLeft)
-        : Math.max(fixedPayment, interest + Math.min(remaining, 0.01)),
-    );
+    const repricePayment = rateChanged;
+    const scheduledPayment: number =
+      month === plannedMonths && fixedPayment !== null
+        ? remaining + interest
+        : Math.min(
+            remaining + interest,
+            fixedPayment === null || repricePayment
+              ? monthlyPayment(remaining, monthlyRate, monthsLeft)
+              : Math.max(fixedPayment, interest + Math.min(remaining, 0.01)),
+          );
     const scheduledPrincipal = Math.min(remaining, scheduledPayment - interest);
     remaining -= scheduledPrincipal;
     const amortizationEvents: AmortizationEvent[] = [];

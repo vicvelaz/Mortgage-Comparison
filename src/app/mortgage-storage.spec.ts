@@ -1,4 +1,4 @@
-import { Mortgage, calculateMortgage } from './mortgage-calculator';
+import { Mortgage, Scenario, calculateMortgage, maxAmortizableAt } from './mortgage-calculator';
 import {
   LEGACY_BACKUP_KEY,
   LEGACY_STORAGE_KEY,
@@ -305,6 +305,178 @@ describe('mortgage-storage: carga desde localStorage (F6)', () => {
     expect(calculateMortgage(base, base.scenarios[0])).toEqual(
       calculateMortgage(loaded.mortgages[0], loaded.mortgages[0].scenarios[0]),
     );
+  });
+
+  it('repairs an excessive v1 amortization, reports it, and preserves both legacy keys', () => {
+    const legacy = {
+      ...legacyBase,
+      id: 'legacy-excess',
+      name: 'Antigua',
+      amount: 50000,
+      years: 10,
+      interestRate: 3,
+      bonuses: [],
+      amortizations: [
+        {
+          id: 'excessive',
+          name: 'Extra',
+          active: true,
+          type: 'single' as const,
+          reductionType: 'payment' as const,
+          amount: 999999,
+          month: 6,
+        },
+      ],
+    };
+    const legacyMortgage: Mortgage = {
+      ...base,
+      id: legacy.id,
+      name: legacy.name,
+      amount: legacy.amount,
+      years: legacy.years,
+      interestRate: legacy.interestRate,
+      scenarios: [
+        {
+          id: 'reference',
+          name: 'Base',
+          bonuses: [],
+          amortizations: [],
+          mode: 'reduceInstallment',
+        },
+      ],
+    };
+    const expectedAmount = maxAmortizableAt(legacyMortgage, legacyMortgage.scenarios[0], 6) / 100;
+    const raw = JSON.stringify({ mortgages: [legacy] });
+    const storage = fakeStorage({ [LEGACY_STORAGE_KEY]: raw });
+
+    const loaded = loadMortgages(storage, now);
+
+    expect(loaded.mortgages).toHaveLength(1);
+    expect(loaded.mortgages[0].scenarios[0].amortizations[0].amount).toBe(expectedAmount);
+    expect(loaded.mortgages[0].scenarios[0].amortizations[0].active).toBe(true);
+    expect(loaded.notice).toContain('Se migró 1 oferta');
+    expect(loaded.notice).toContain('amortización «Extra» de «Antigua»');
+    expect(loaded.notice).toContain(
+      new Intl.NumberFormat('es-ES', { style: 'currency', currency: 'EUR' }).format(expectedAmount),
+    );
+    expect(storage.data.get(LEGACY_BACKUP_KEY)).toBe(raw);
+    expect(storage.data.get(LEGACY_STORAGE_KEY)).toBe(raw);
+
+    const migrated = loaded.mortgages[0];
+    const referenceScenario: Scenario = {
+      ...migrated.scenarios[0],
+      amortizations: [{ ...migrated.scenarios[0].amortizations[0], amount: expectedAmount }],
+    };
+    expect(calculateMortgage(migrated, migrated.scenarios[0])).toEqual(
+      calculateMortgage(migrated, referenceScenario),
+    );
+  });
+
+  it('deactivates a v1 amortization after an earlier total cancellation', () => {
+    const legacy = {
+      ...legacyBase,
+      amount: 50000,
+      years: 10,
+      bonuses: [],
+      amortizations: [
+        {
+          id: 'cancel',
+          name: 'Cancelación',
+          active: true,
+          type: 'single' as const,
+          reductionType: 'payment' as const,
+          amount: 999999,
+          month: 6,
+        },
+        {
+          id: 'late',
+          name: 'Posterior',
+          active: true,
+          type: 'single' as const,
+          reductionType: 'payment' as const,
+          amount: 1000,
+          month: 12,
+        },
+      ],
+    };
+    const storage = fakeStorage({ [LEGACY_STORAGE_KEY]: JSON.stringify({ mortgages: [legacy] }) });
+
+    const loaded = loadMortgages(storage, now);
+
+    expect(loaded.mortgages).toHaveLength(1);
+    expect(loaded.mortgages[0].scenarios[0].amortizations.map((item) => item.active)).toEqual([
+      true,
+      false,
+    ]);
+    expect(loaded.notice).toContain('Posterior');
+  });
+
+  it('discards invalid v1 terms after repair and reports the rejected offer', () => {
+    const invalid = { ...legacyBase, id: 'legacy-invalid', name: 'Plazo inválido', years: 200 };
+    const raw = JSON.stringify({ mortgages: [invalid] });
+    const storage = fakeStorage({ [LEGACY_STORAGE_KEY]: raw });
+
+    const loaded = loadMortgages(storage, now);
+
+    expect(loaded.mortgages).toEqual([]);
+    expect(loaded.notice).toContain('Se descartó 1 oferta');
+    expect(loaded.notice).toContain('Plazo inválido');
+    expect(storage.data.get(LEGACY_BACKUP_KEY)).toBe(raw);
+    expect(storage.data.get(LEGACY_STORAGE_KEY)).toBe(raw);
+  });
+
+  it('migrates 100 deterministic v1 offers with excessive and out-of-term amortizations', () => {
+    const offers = Array.from({ length: 100 }, (_value, index) => {
+      const years = 5 + (index % 16);
+      return {
+        ...legacyBase,
+        id: `legacy-${index}`,
+        name: `Antigua ${index}`,
+        amount: 40000 + index * 1000,
+        years,
+        interestRate: 1 + (index % 5) * 0.5,
+        bonuses: [],
+        amortizations: [
+          {
+            id: `excess-${index}`,
+            name: 'Excesiva',
+            active: true,
+            type: 'single' as const,
+            reductionType: 'payment' as const,
+            amount: 1_000_000,
+            month: 6 + (index % 12),
+          },
+          {
+            id: `late-${index}`,
+            name: 'Fuera de plazo',
+            active: true,
+            type: 'single' as const,
+            reductionType: 'payment' as const,
+            amount: 1000,
+            month: years * 12 + 1,
+          },
+        ],
+      };
+    });
+    const raw = JSON.stringify({ mortgages: offers });
+    const storage = fakeStorage({ [LEGACY_STORAGE_KEY]: raw });
+
+    const loaded = loadMortgages(storage, now);
+
+    expect(loaded.mortgages).toHaveLength(100);
+    for (const [index, migrated] of loaded.mortgages.entries()) {
+      const [excessive, outOfTerm] = migrated.scenarios[0].amortizations;
+      const referenceScenario: Scenario = {
+        ...migrated.scenarios[0],
+        amortizations: [{ ...excessive }, { ...outOfTerm, active: false }],
+      };
+      expect(excessive.amount, `offer ${index}`).toBeLessThan(1_000_000);
+      expect(outOfTerm.active, `offer ${index}`).toBe(false);
+      expect(calculateMortgage(migrated, migrated.scenarios[0]).remainingCapital).toBe(0);
+      expect(calculateMortgage(migrated, migrated.scenarios[0])).toEqual(
+        calculateMortgage(migrated, referenceScenario),
+      );
+    }
   });
 
   it('no migra v1 cuando ya existe una clave v2', () => {

@@ -1,4 +1,4 @@
-import { DecimalPipe } from '@angular/common';
+import { DecimalPipe, NgTemplateOutlet } from '@angular/common';
 import {
   AfterViewInit,
   Component,
@@ -10,6 +10,7 @@ import {
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatCheckboxModule } from '@angular/material/checkbox';
+import { MatIconModule } from '@angular/material/icon';
 import { NavigationEnd, Router, RouterLink } from '@angular/router';
 import type { Chart as ChartInstance } from 'chart.js';
 import {
@@ -49,8 +50,8 @@ const currencyFormatter = new Intl.NumberFormat('es-ES', {
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
 });
-const chartColors = ['#007f73', '#df765d', '#586b9c', '#d3a347'];
-const amortizationColors = ['#007f73', '#df765d', '#586b9c', '#d3a347', '#9b6db0', '#5a9bb5'];
+const chartColors = ['#dcc084', '#8bbde0', '#8fc8aa', '#ee9c96'];
+const amortizationColors = ['#dcc084', '#8bbde0', '#8fc8aa', '#ee9c96', '#c7a6c9', '#aeb8c4'];
 Chart.register(
   BarController,
   BarElement,
@@ -62,6 +63,8 @@ Chart.register(
   PointElement,
   Tooltip,
 );
+Chart.defaults.color = '#aaaab3';
+Chart.defaults.borderColor = '#36363e';
 
 type ViewName = 'dashboard' | 'mortgages' | 'comparison';
 type ResultKey = 'totalCost' | 'firstPayment' | 'totalInterest';
@@ -115,7 +118,9 @@ function differenceInCents(left: number, right: number): number {
   selector: 'app-workspace',
   imports: [
     DecimalPipe,
+    NgTemplateOutlet,
     MatCheckboxModule,
+    MatIconModule,
     RouterLink,
     AmortizationScheduleComponent,
     MortgageFormComponent,
@@ -155,6 +160,12 @@ export class Workspace implements AfterViewInit, OnDestroy {
     this.mortgageResults().filter(({ mortgage, scenario }) =>
       this.selectedIds().includes(scenarioKey(mortgage.id, scenario.id)),
     ),
+  );
+  readonly offerGroups = computed(() =>
+    this.mortgages().map((mortgage) => ({
+      mortgage,
+      items: this.mortgageResults().filter((item) => item.mortgage.id === mortgage.id),
+    })),
   );
   readonly editingResult = computed(
     () =>
@@ -304,10 +315,19 @@ export class Workspace implements AfterViewInit, OnDestroy {
     );
   }
 
-  selectScenario(event: Event): void {
-    const id = (event.currentTarget as HTMLSelectElement).value;
-    if (this.draft.scenarios.some((scenario) => scenario.id === id)) {
-      this.selectedScenarioId.set(id);
+  portfolioMortgages(): Mortgage[] {
+    return this.editingId()
+      ? this.mortgages().map((mortgage) =>
+          mortgage.id === this.editingId() ? this.draft : mortgage,
+        )
+      : [this.draft, ...this.mortgages()];
+  }
+
+  selectPortfolioScenario(mortgage: Mortgage, scenarioId: string): void {
+    if (mortgage.id === this.draft.id) {
+      this.selectedScenarioId.set(scenarioId);
+    } else {
+      this.editMortgage(mortgage, scenarioId);
     }
   }
 
@@ -393,6 +413,18 @@ export class Workspace implements AfterViewInit, OnDestroy {
 
   isSelected(mortgageId: string, scenarioId: string): boolean {
     return this.selectedIds().includes(scenarioKey(mortgageId, scenarioId));
+  }
+
+  selectedVariantCount(mortgage: Mortgage): number {
+    return mortgage.scenarios
+      .slice(1)
+      .filter((scenario) => this.isSelected(mortgage.id, scenario.id)).length;
+  }
+
+  savedScenarioResult(mortgageId: string, scenarioId: string): ScenarioResult | undefined {
+    return this.mortgageResults().find(
+      (item) => item.mortgage.id === mortgageId && item.scenario.id === scenarioId,
+    );
   }
 
   currency(value: number): string {

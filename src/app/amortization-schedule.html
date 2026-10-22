@@ -1,11 +1,11 @@
-<section class="panel schedule-panel">
-  <div class="panel-heading">
+<details class="panel schedule-panel detail-section" open>
+  <summary class="panel-heading">
     <div>
       <p class="eyebrow">DETALLE DE LA OFERTA</p>
       <h2>Calendario de amortización · {{ detail.mortgage.name }} · {{ detail.scenario.name }}</h2>
     </div>
     <span class="schedule-caption">{{ detail.result.rows.length }} mensualidades</span>
-  </div>
+  </summary>
   <div class="detail-kpis">
     <div>
       <small>Cuota inicial</small><strong>{{ currency(detail.result.firstPayment) }}</strong>
@@ -77,87 +77,95 @@
       <p>Con esta configuración la hipoteca quedará cancelada en el mes {{ month }}.</p>
     </div>
   }
-  <app-chart-viewport
-    class="detail-chart-frame"
-    label="Capital e intereses del calendario de amortización"
-  >
-    <canvas
-      #detailChart
-      aria-label="Evolución del capital pendiente, intereses acumulados y capital amortizado"
-    ></canvas>
-  </app-chart-viewport>
-  <section class="payment-breakdown-chart">
-    <div class="payment-summary-heading">
-      <h3>Desglose de pagos</h3>
-      <div class="chart-period-toggle" role="group" aria-label="Periodo del gráfico de pagos">
-        <button
-          type="button"
-          [attr.aria-pressed]="chartPeriod === 'annual'"
-          (click)="setChartPeriod('annual')"
-        >
-          Anual
-        </button>
-        <button
-          type="button"
-          [attr.aria-pressed]="chartPeriod === 'monthly'"
-          (click)="setChartPeriod('monthly')"
-        >
-          Mensual
-        </button>
-      </div>
-    </div>
+  <details class="detail-section" open>
+    <summary>Evolución y desglose de pagos</summary>
     <app-chart-viewport
       class="detail-chart-frame"
-      label="Desglose anual o mensual de intereses, capital ordinario y amortización extra"
+      label="Capital e intereses del calendario de amortización"
     >
       <canvas
-        #breakdownChart
-        aria-label="Gráfico apilado de intereses, capital ordinario y amortización extra"
+        #detailChart
+        aria-label="Evolución del capital pendiente, intereses acumulados y capital amortizado"
       ></canvas>
     </app-chart-viewport>
-  </section>
-  <div class="table-scroll schedule-table-wrap">
-    <table class="data-table">
-      <thead>
-        <tr>
-          <th>Mes</th>
-          <th>Cuota ordinaria</th>
-          <th>Interés</th>
-          <th>% intereses</th>
-          <th>Capital</th>
-          <th>% capital</th>
-          <th>Amortización extra</th>
-          <th>Comisiones</th>
-          <th>Capital pendiente</th>
-        </tr>
-      </thead>
-      <tbody>
-        @for (row of detail.result.rows; track row.month) {
+    <section class="payment-breakdown-chart">
+      <div class="payment-summary-heading">
+        <h3>Desglose de pagos</h3>
+        <div class="chart-period-toggle" role="group" aria-label="Periodo del gráfico de pagos">
+          <button
+            type="button"
+            [attr.aria-pressed]="chartPeriod === 'annual'"
+            (click)="setChartPeriod('annual')"
+          >
+            Anual
+          </button>
+          <button
+            type="button"
+            [attr.aria-pressed]="chartPeriod === 'monthly'"
+            (click)="setChartPeriod('monthly')"
+          >
+            Mensual
+          </button>
+        </div>
+      </div>
+      <app-chart-viewport
+        class="detail-chart-frame"
+        label="Desglose anual o mensual de intereses, capital ordinario y amortización extra"
+      >
+        <canvas
+          #breakdownChart
+          aria-label="Gráfico apilado de intereses, capital ordinario y amortización extra"
+        ></canvas>
+      </app-chart-viewport>
+    </section>
+  </details>
+  <details class="detail-section">
+    <summary>
+      Calendario mensual <span>{{ detail.result.rows.length }} mensualidades</span>
+    </summary>
+    <div class="table-scroll schedule-table-wrap">
+      <table class="data-table">
+        <thead>
           <tr>
-            <td>{{ row.month }}</td>
-            <td>{{ currency(row.payment) }}</td>
-            <td>{{ currency(row.interest) }}</td>
-            <td>{{ paymentPercentage(row.interest, row.payment) }}</td>
-            <td>{{ currency(row.principal) }}</td>
-            <td>{{ paymentPercentage(row.principal, row.payment) }}</td>
-            <td class="extra-payment-cell">
-              {{ row.extraPayment ? currency(row.extraPayment) : '—' }}
-              @for (event of row.amortizationEvents; track event.id) {
-                <span
-                  class="amortization-dot"
-                  [style.background]="amortizationColor(detail.scenario, event.id)"
-                  [title]="event.name + ' · mes ' + row.month + ': ' + currency(event.amount)"
-                  [attr.aria-label]="
-                    event.name + ' en mes ' + row.month + ': ' + currency(event.amount)
-                  "
-                ></span>
-              }
-            </td>
-            <td>{{ row.fee ? currency(row.fee) : '—' }}</td>
-            <td>{{ currency(row.remainingCapital) }}</td>
+            <th>Mes</th>
+            <th>Cuota ordinaria</th>
+            <th>Interés</th>
+            <th>% intereses</th>
+            <th>Capital</th>
+            <th>% capital</th>
+            <th>Amortización extra</th>
+            <th>Comisiones</th>
+            <th>Capital pendiente</th>
           </tr>
-        }
-      </tbody>
-    </table>
-  </div>
-</section>
+        </thead>
+        <tbody>
+          @for (row of detail.result.rows; track row.month) {
+            <tr>
+              <td>{{ row.month }}</td>
+              <td>{{ currency(row.payment) }}</td>
+              <td>{{ currency(row.interest) }}</td>
+              <td>{{ paymentPercentage(row.interest, row.payment) }}</td>
+              <td>{{ currency(row.principal) }}</td>
+              <td>{{ paymentPercentage(row.principal, row.payment) }}</td>
+              <td class="extra-payment-cell">
+                {{ row.extraPayment ? currency(row.extraPayment) : '—' }}
+                @for (event of row.amortizationEvents; track event.id) {
+                  <span
+                    class="amortization-dot"
+                    [style.background]="amortizationColor(detail.scenario, event.id)"
+                    [title]="event.name + ' · mes ' + row.month + ': ' + currency(event.amount)"
+                    [attr.aria-label]="
+                      event.name + ' en mes ' + row.month + ': ' + currency(event.amount)
+                    "
+                  ></span>
+                }
+              </td>
+              <td>{{ row.fee ? currency(row.fee) : '—' }}</td>
+              <td>{{ currency(row.remainingCapital) }}</td>
+            </tr>
+          }
+        </tbody>
+      </table>
+    </div>
+  </details>
+</details>

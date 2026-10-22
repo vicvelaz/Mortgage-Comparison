@@ -39,11 +39,17 @@
       </div>
       <div class="top-actions">
         <span class="save-status"><i></i>{{ status() }}</span>
-        <button class="button button-quiet" type="button" (click)="exportData()">
-          Exportar JSON
+        <button
+          class="icon-button"
+          type="button"
+          (click)="exportData()"
+          aria-label="Exportar JSON"
+          title="Exportar JSON"
+        >
+          <mat-icon>download</mat-icon>
         </button>
-        <label class="button button-outline import-button">
-          Importar JSON
+        <label class="icon-button import-button" title="Importar JSON">
+          <mat-icon aria-hidden="true">upload</mat-icon>
           <input
             type="file"
             accept="application/json,.json"
@@ -62,8 +68,14 @@
             <h1>Tu próxima hipoteca,<br /><em>con perspectiva.</em></h1>
             <p class="heading-note">Compara el coste real de cada oferta antes de decidir.</p>
           </div>
-          <button class="button button-primary" type="button" (click)="openNewMortgage()">
-            <span class="plus">+</span> Nueva oferta
+          <button
+            class="icon-button primary-icon"
+            type="button"
+            (click)="openNewMortgage()"
+            aria-label="Nueva oferta"
+            title="Nueva oferta"
+          >
+            <mat-icon>add</mat-icon>
           </button>
         </div>
 
@@ -133,10 +145,8 @@
               <a routerLink="/mortgages" class="text-link">Ver todas <span>↗</span></a>
             </div>
             <div class="recent-list">
-              @for (
-                item of mortgageResults().slice(0, 4);
-                track trackScenarioResult($index, item)
-              ) {
+              @for (group of offerGroups().slice(0, 4); track group.mortgage.id) {
+                @let item = group.items[0];
                 <button
                   type="button"
                   class="recent-row"
@@ -144,24 +154,51 @@
                 >
                   <span class="offer-avatar">{{ item.mortgage.bank.slice(0, 1) }}</span>
                   <span class="recent-info"
-                    ><strong>{{ item.mortgage.name }} · {{ item.scenario.name }}</strong
+                    ><strong>{{ item.mortgage.name }} <span class="base-label">Base</span></strong
                     ><small>{{ item.mortgage.bank }} · {{ item.mortgage.years }} años</small></span
                   >
                   <span class="recent-amount"
                     >{{ currency(item.result.firstPayment) }}<small>/mes</small></span
                   >
                 </button>
+                @if (group.items.length > 1) {
+                  <details class="variant-disclosure recent-variants">
+                    <summary>{{ group.items.length - 1 }} variantes</summary>
+                    <div class="variant-children">
+                      @for (variant of group.items.slice(1); track variant.scenario.id) {
+                        <button
+                          type="button"
+                          class="recent-row"
+                          (click)="editMortgage(variant.mortgage, variant.scenario.id)"
+                        >
+                          <span class="recent-info"
+                            ><strong>{{ variant.scenario.name }}</strong
+                            ><small
+                              >{{ variant.mortgage.bank }} ·
+                              {{ variant.mortgage.years }} años</small
+                            ></span
+                          >
+                          <span class="recent-amount"
+                            >{{ currency(variant.result.firstPayment) }}<small>/mes</small></span
+                          >
+                        </button>
+                      }
+                    </div>
+                  </details>
+                }
               } @empty {
                 <p class="empty-state">Todavía no hay ofertas guardadas.</p>
               }
             </div>
             @if (mortgages().length > 0) {
               <button
-                class="button button-soft full-button"
+                class="icon-button full-button"
                 type="button"
                 (click)="setView('comparison')"
+                aria-label="Abrir comparador"
+                title="Abrir comparador"
               >
-                Abrir comparador
+                <mat-icon>compare_arrows</mat-icon>
               </button>
             }
           </section>
@@ -176,41 +213,7 @@
             <span class="selection-count">{{ selectedResults().length }} seleccionadas</span>
           </div>
           <div class="selection-list">
-            @for (item of mortgageResults(); track trackScenarioResult($index, item)) {
-              <div class="selection-row">
-                <mat-checkbox
-                  [checked]="isSelected(item.mortgage.id, item.scenario.id)"
-                  (change)="toggleComparison(item.mortgage.id, item.scenario.id, $event.checked)"
-                ></mat-checkbox>
-                <span
-                  class="color-marker"
-                  [style.background]="markerColor(item.mortgage.id, item.scenario.id)"
-                ></span>
-                <span class="selection-name"
-                  ><strong>{{ item.mortgage.name }} · {{ item.scenario.name }}</strong
-                  ><small>{{ item.mortgage.bank }}</small>
-                  @if (hasUnpaidBalance(item)) {
-                    <small class="row-warning">No se cancela dentro del plazo</small>
-                  }
-                </span
-                >
-                <span class="selection-rate"
-                  >{{ item.mortgage.interestRate | number: '1.2-2' }}%</span
-                >
-                <span class="selection-payment"
-                  >{{ currency(item.result.firstPayment) }}<small>/ mes</small></span
-                >
-                <button
-                  class="link-button"
-                  type="button"
-                  (click)="editMortgage(item.mortgage, item.scenario.id)"
-                >
-                  Editar
-                </button>
-              </div>
-            } @empty {
-              <p class="empty-state">Crea tu primera oferta para comenzar la comparación.</p>
-            }
+            <ng-container *ngTemplateOutlet="groupedSelection; context: { picker: false }" />
           </div>
         </section>
       </section>
@@ -224,8 +227,14 @@
               Edita las condiciones y añade vinculaciones o amortizaciones.
             </p>
           </div>
-          <button class="button button-primary" type="button" (click)="openNewMortgage()">
-            <span class="plus">+</span> Nueva oferta
+          <button
+            class="icon-button primary-icon"
+            type="button"
+            (click)="openNewMortgage()"
+            aria-label="Nueva oferta"
+            title="Nueva oferta"
+          >
+            <mat-icon>add</mat-icon>
           </button>
         </div>
 
@@ -236,47 +245,48 @@
               <h2>Escenarios</h2>
             </div>
             <div class="scenario-actions">
-              <button class="button button-outline" type="button" (click)="createScenario()">
-                Nuevo
+              <button
+                class="icon-button"
+                type="button"
+                (click)="createScenario()"
+                aria-label="Nuevo escenario"
+                title="Nuevo escenario"
+              >
+                <mat-icon>add</mat-icon>
               </button>
               <button
-                class="button button-outline"
+                class="icon-button"
                 type="button"
                 (click)="duplicateScenario()"
                 [disabled]="!activeScenario()"
+                aria-label="Duplicar escenario"
+                title="Duplicar escenario"
               >
-                Duplicar
+                <mat-icon>content_copy</mat-icon>
               </button>
               <button
-                class="button button-outline"
+                class="icon-button"
                 type="button"
                 (click)="renameScenario()"
                 [disabled]="!activeScenario()"
+                aria-label="Renombrar escenario"
+                title="Renombrar escenario"
               >
-                Renombrar
+                <mat-icon>edit</mat-icon>
               </button>
               <button
-                class="button button-outline danger-link"
+                class="icon-button danger-link"
                 type="button"
                 (click)="deleteScenario()"
                 [disabled]="draft.scenarios.length <= 1"
+                aria-label="Eliminar escenario"
+                title="Eliminar escenario"
               >
-                Eliminar
+                <mat-icon>delete</mat-icon>
               </button>
             </div>
           </div>
-          <label class="field scenario-selector">
-            <span>Escenario en edición</span>
-            <select
-              aria-label="Seleccionar escenario"
-              [value]="selectedScenarioId()"
-              (change)="selectScenario($event)"
-            >
-              @for (scenario of draft.scenarios; track scenario.id) {
-                <option [value]="scenario.id">{{ scenario.name }}</option>
-              }
-            </select>
-          </label>
+          <p class="active-scenario-name">{{ activeScenario()?.name }}</p>
         </section>
 
         <div class="editor-layout">
@@ -296,38 +306,87 @@
               </div>
               <span class="selection-count">{{ mortgages().length }}</span>
             </div>
-            @for (item of mortgageResults(); track trackScenarioResult($index, item)) {
-              <article
-                class="offer-card"
-                [class.offer-active]="
-                  editingId() === item.mortgage.id && selectedScenarioId() === item.scenario.id
-                "
-              >
-                <button
-                  class="offer-card-main"
-                  type="button"
-                  (click)="editMortgage(item.mortgage, item.scenario.id)"
-                >
-                  <span class="offer-avatar">{{ item.mortgage.bank.slice(0, 1) }}</span>
-                  <span class="recent-info"
-                    ><strong>{{ item.mortgage.name }} · {{ item.scenario.name }}</strong
-                    ><small>{{ item.mortgage.bank }}</small></span
+            @for (mortgage of portfolioMortgages(); track mortgage.id) {
+              <article class="offer-group portfolio-group">
+                <div class="portfolio-base-row">
+                  <button
+                    class="offer-card-main"
+                    type="button"
+                    [class.offer-active]="
+                      draft.id === mortgage.id && selectedScenarioId() === mortgage.scenarios[0].id
+                    "
+                    [attr.aria-pressed]="
+                      draft.id === mortgage.id && selectedScenarioId() === mortgage.scenarios[0].id
+                    "
+                    (click)="selectPortfolioScenario(mortgage, mortgage.scenarios[0].id)"
                   >
-                </button>
-                <div class="offer-card-metrics">
-                  <span>{{ currency(item.result.firstPayment) }}<small>/ mes</small></span
-                  ><span>{{ item.mortgage.interestRate | number: '1.2-2' }}%</span>
+                    <span class="offer-avatar">{{ mortgage.bank.slice(0, 1) || '·' }}</span>
+                    <span class="recent-info"
+                      ><strong>{{ mortgage.name || 'Nueva oferta' }}</strong
+                      ><small
+                        >{{ mortgage.bank || 'Sin entidad' }} ·
+                        {{ mortgage.scenarios[0].name }}</small
+                      ></span
+                    >
+                    <span class="base-label">Base</span>
+                  </button>
+                  @if (mortgage.id !== draft.id || editingId()) {
+                    <button
+                      class="icon-button danger-link"
+                      type="button"
+                      (click)="deleteMortgage(mortgage)"
+                      [attr.aria-label]="'Eliminar oferta ' + mortgage.name"
+                      title="Eliminar oferta y sus variantes"
+                    >
+                      <mat-icon>delete</mat-icon>
+                    </button>
+                  }
                 </div>
-                <button
-                  type="button"
-                  class="link-button danger-link"
-                  (click)="deleteMortgage(item.mortgage)"
-                >
-                  Eliminar
-                </button>
+                <div class="offer-card-metrics">
+                  @if (savedScenarioResult(mortgage.id, mortgage.scenarios[0].id); as saved) {
+                    <span>{{ currency(saved.result.firstPayment) }}<small>/ mes</small></span>
+                  } @else {
+                    <span class="draft-notice">Sin guardar</span>
+                  }
+                  <span>{{ mortgage.interestRate | number: '1.2-2' }}%</span>
+                </div>
+                @if (mortgage.scenarios.length > 1) {
+                  <details class="variant-disclosure" [open]="draft.id === mortgage.id">
+                    <summary>{{ mortgage.scenarios.length - 1 }} variantes</summary>
+                    <div class="variant-children">
+                      @for (scenario of mortgage.scenarios.slice(1); track scenario.id) {
+                        <button
+                          class="portfolio-variant"
+                          type="button"
+                          [class.offer-active]="
+                            draft.id === mortgage.id && selectedScenarioId() === scenario.id
+                          "
+                          [attr.aria-pressed]="
+                            draft.id === mortgage.id && selectedScenarioId() === scenario.id
+                          "
+                          (click)="selectPortfolioScenario(mortgage, scenario.id)"
+                        >
+                          <mat-icon>subdirectory_arrow_right</mat-icon
+                          ><span
+                            >{{ scenario.name }}
+                            @if (savedScenarioResult(mortgage.id, scenario.id); as saved) {
+                              <small
+                                >{{ currency(saved.result.firstPayment) }} / mes ·
+                                {{ mortgage.interestRate | number: '1.2-2' }}%</small
+                              >
+                            } @else {
+                              <small>Sin guardar</small>
+                            }
+                          </span>
+                          @if (draft.id === mortgage.id && selectedScenarioId() === scenario.id) {
+                            <mat-icon>check</mat-icon>
+                          }
+                        </button>
+                      }
+                    </div>
+                  </details>
+                }
               </article>
-            } @empty {
-              <p class="empty-state">Aún no has creado ofertas.</p>
             }
           </aside>
         </div>
@@ -346,8 +405,12 @@
               Selecciona al menos dos ofertas para comparar coste, cuota y evolución.
             </p>
           </div>
-          <a class="button button-primary" routerLink="/mortgages"
-            ><span class="plus">+</span> Gestionar ofertas</a
+          <a
+            class="icon-button primary-icon"
+            routerLink="/mortgages"
+            aria-label="Gestionar ofertas"
+            title="Gestionar ofertas"
+            ><mat-icon>edit_note</mat-icon></a
           >
         </div>
         <section class="panel comparison-picker">
@@ -359,28 +422,7 @@
             <span class="selection-count">{{ selectedResults().length }} seleccionadas</span>
           </div>
           <div class="picker-list">
-            @for (item of mortgageResults(); track trackScenarioResult($index, item)) {
-              <div class="picker-item">
-                <mat-checkbox
-                  [checked]="isSelected(item.mortgage.id, item.scenario.id)"
-                  (change)="toggleComparison(item.mortgage.id, item.scenario.id, $event.checked)"
-                ></mat-checkbox
-                ><span
-                  class="color-marker"
-                  [style.background]="markerColor(item.mortgage.id, item.scenario.id)"
-                ></span
-                ><span class="selection-name"
-                  ><strong>{{ item.mortgage.name }} · {{ item.scenario.name }}</strong
-                  ><small>{{ item.mortgage.bank }}</small>
-                  @if (hasUnpaidBalance(item)) {
-                    <small class="row-warning">No se cancela dentro del plazo</small>
-                  }
-                </span
-                ><span class="picker-amount">{{ currency(item.mortgage.amount) }}</span>
-              </div>
-            } @empty {
-              <p class="empty-state">Añade ofertas en “Mis ofertas” para comparar.</p>
-            }
+            <ng-container *ngTemplateOutlet="groupedSelection; context: { picker: true }" />
           </div>
         </section>
 
@@ -605,3 +647,80 @@
     </div>
   </main>
 </div>
+
+<ng-template #groupedSelection let-picker="picker">
+  @for (group of offerGroups(); track group.mortgage.id) {
+    <div class="offer-group">
+      <ng-container
+        *ngTemplateOutlet="
+          selectionRow;
+          context: { $implicit: group.items[0], picker: picker, base: true }
+        "
+      />
+      @if (group.items.length > 1) {
+        <details class="variant-disclosure">
+          <summary>
+            {{ group.items.length - 1 }} variantes
+            <span class="variant-selected"
+              >{{ selectedVariantCount(group.mortgage) }} seleccionadas</span
+            >
+          </summary>
+          <div class="variant-children">
+            @for (item of group.items.slice(1); track item.scenario.id) {
+              <ng-container
+                *ngTemplateOutlet="
+                  selectionRow;
+                  context: { $implicit: item, picker: picker, base: false }
+                "
+              />
+            }
+          </div>
+        </details>
+      }
+    </div>
+  } @empty {
+    <p class="empty-state">Crea tu primera oferta para comenzar la comparación.</p>
+  }
+</ng-template>
+
+<ng-template #selectionRow let-item let-picker="picker" let-base="base">
+  <div [class]="picker ? 'picker-item' : 'selection-row'">
+    <mat-checkbox
+      [checked]="isSelected(item.mortgage.id, item.scenario.id)"
+      [aria-label]="'Comparar ' + item.mortgage.name + ' · ' + item.scenario.name"
+      (change)="toggleComparison(item.mortgage.id, item.scenario.id, $event.checked)"
+    />
+    <span
+      class="color-marker"
+      [style.background]="markerColor(item.mortgage.id, item.scenario.id)"
+    ></span>
+    <span class="selection-name"
+      ><strong
+        >{{ base ? item.mortgage.name : item.scenario.name }}
+        @if (base) {
+          <span class="base-label">Base</span>
+        }</strong
+      ><small>{{ item.mortgage.bank }} · {{ item.scenario.name }}</small>
+      @if (hasUnpaidBalance(item)) {
+        <small class="row-warning">No se cancela dentro del plazo</small>
+      }
+    </span>
+    @if (picker) {
+      <span class="picker-amount">{{ currency(item.mortgage.amount) }}</span>
+    } @else {
+      <span class="selection-rate">{{ item.mortgage.interestRate | number: '1.2-2' }}%</span>
+      <span class="selection-payment"
+        >{{ currency(item.result.firstPayment) }}<small>/ mes</small></span
+      >
+      <button
+        class="icon-button"
+        type="button"
+        (click)="editMortgage(item.mortgage, item.scenario.id)"
+        [attr.aria-label]="'Editar ' + item.mortgage.name + ' · ' + item.scenario.name"
+        title="Editar escenario"
+      >
+        <mat-icon>edit</mat-icon>
+      </button>
+    }
+  </div>
+</ng-template>

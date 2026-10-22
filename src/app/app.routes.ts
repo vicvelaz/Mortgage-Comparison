@@ -3,9 +3,15 @@ import { Routes } from '@angular/router';
 const loadWorkspace = () => import('./workspace').then((module) => module.Workspace);
 
 export const routes: Routes = [
-	{ path: '', pathMatch: 'full', redirectTo: 'dashboard' },
-	{ path: 'dashboard', loadComponent: loadWorkspace },
-	{ path: 'mortgages', loadComponent: loadWorkspace },
-	{ path: 'comparison', loadComponent: loadWorkspace },
-	{ path: '**', redirectTo: 'dashboard' },
+	{
+		path: '',
+		loadComponent: loadWorkspace,
+		children: [
+			{ path: '', pathMatch: 'full', redirectTo: 'dashboard' },
+			{ path: 'dashboard', children: [] },
+			{ path: 'mortgages', children: [] },
+			{ path: 'comparison', children: [] },
+			{ path: '**', redirectTo: 'dashboard' },
+		],
+	},
 ];

@@ -1,5 +1,6 @@
 import { provideRouter } from '@angular/router';
 import { TestBed } from '@angular/core/testing';
+import { RouterTestingHarness } from '@angular/router/testing';
 import { routes } from './app.routes';
 import { calculateMortgage, Mortgage, Scenario } from './mortgage-calculator';
 import { comparisonMonthLabels, Workspace } from './workspace';
@@ -34,6 +35,110 @@ describe('scenario comparison', () => {
   });
 
   afterEach(() => localStorage.clear());
+
+  it('preserves selected variants and the editor when navigating between workspace views', async () => {
+    const harness = await RouterTestingHarness.create();
+    const workspace = await harness.navigateByUrl('/dashboard', Workspace);
+    const offer = mortgage('one', 25, [scenario('base', 'Base'), scenario('other', 'Otra')]);
+    workspace.mortgages.set([offer]);
+    workspace.toggleComparison('one', 'other', true);
+    const comparison = await harness.navigateByUrl('/comparison', Workspace);
+    expect(comparison).toBe(workspace);
+    expect(comparison.isSelected('one', 'other')).toBe(true);
+
+    workspace.editMortgage(offer, 'other');
+    await harness.navigateByUrl('/mortgages', Workspace);
+    expect(workspace.editingId()).toBe('one');
+    expect(workspace.selectedScenarioId()).toBe('other');
+    workspace.draft.bank = 'Cambio pendiente';
+    await harness.navigateByUrl('/dashboard', Workspace);
+    await harness.navigateByUrl('/mortgages', Workspace);
+    expect(workspace.draft.bank).toBe('Cambio pendiente');
+  });
+
+  it('groups variants under their base offer without changing comparison selection', () => {
+    const fixture = TestBed.createComponent(Workspace);
+    const workspace = fixture.componentInstance;
+    const offer = mortgage('one', 25, [scenario('base', 'Base'), scenario('other', 'Otra')]);
+    workspace.mortgages.set([offer]);
+    workspace.toggleComparison('one', 'other', true);
+
+    expect(workspace.offerGroups()[0].items.map((item) => item.scenario.id)).toEqual([
+      'base',
+      'other',
+    ]);
+    expect(workspace.isSelected('one', 'other')).toBe(true);
+  });
+
+  it('keeps unsaved edits when selecting a portfolio variant', () => {
+    const fixture = TestBed.createComponent(Workspace);
+    const workspace = fixture.componentInstance;
+    const offer = mortgage('one', 25, [scenario('base', 'Base'), scenario('other', 'Otra')]);
+    workspace.mortgages.set([offer]);
+    workspace.editMortgage(offer);
+    workspace.draft.bank = 'Cambio pendiente';
+    workspace.createScenario();
+    const createdId = workspace.selectedScenarioId();
+    workspace.selectPortfolioScenario(workspace.draft, 'base');
+    workspace.selectPortfolioScenario(workspace.draft, createdId);
+
+    expect(workspace.draft.bank).toBe('Cambio pendiente');
+    expect(workspace.selectedScenarioId()).toBe(createdId);
+    expect(workspace.portfolioMortgages()[0].scenarios).toHaveLength(3);
+    expect(offer.scenarios).toHaveLength(2);
+  });
+
+  it('renders collapsed variant groups in summary and comparison without clearing selection', () => {
+    const fixture = TestBed.createComponent(Workspace);
+    const workspace = fixture.componentInstance;
+    workspace.mortgages.set([
+      mortgage('one', 25, [scenario('base', 'Base'), scenario('other', 'Otra')]),
+    ]);
+    fixture.detectChanges();
+
+    for (const selector of ['.selection-list', '.picker-list']) {
+      const list = fixture.nativeElement.querySelector(selector) as HTMLElement;
+      expect(list.querySelectorAll('.offer-group')).toHaveLength(1);
+      const disclosure = list.querySelector('details')!;
+      expect(disclosure.open).toBe(false);
+      disclosure.open = true;
+      const checkbox = disclosure.querySelector('input[type="checkbox"]') as HTMLInputElement;
+      checkbox.click();
+      fixture.detectChanges();
+      expect(workspace.isSelected('one', 'other')).toBe(true);
+      disclosure.open = false;
+      fixture.detectChanges();
+      expect(workspace.isSelected('one', 'other')).toBe(true);
+      expect(disclosure.querySelector('input')!.checked).toBe(true);
+      expect(list.textContent).toContain('1 seleccionadas');
+      workspace.toggleComparison('one', 'other', false);
+      fixture.detectChanges();
+    }
+  });
+
+  it('keeps draft variants selectable and exposes independent collapsible form sections', () => {
+    const fixture = TestBed.createComponent(Workspace);
+    const workspace = fixture.componentInstance;
+    workspace.openNewMortgage();
+    workspace.createScenario();
+    fixture.detectChanges();
+    const element = fixture.nativeElement as HTMLElement;
+
+    expect(element.querySelectorAll('.portfolio-variant')).toHaveLength(1);
+    expect(element.querySelector('.portfolio-variant')!.getAttribute('aria-pressed')).toBe('true');
+    const sections = element.querySelectorAll<HTMLDetailsElement>('.editor-section');
+    expect(sections).toHaveLength(5);
+    expect(sections[0].open).toBe(true);
+    expect(
+      Array.from(sections)
+        .slice(1)
+        .every((section) => !section.open),
+    ).toBe(true);
+    workspace.draft.bank = 'Cambio pendiente';
+    sections[0].open = false;
+    sections[0].open = true;
+    expect(workspace.draft.bank).toBe('Cambio pendiente');
+  });
 
   it('calculates savings against the mortgage base scenario in cents', () => {
     const base = scenario('base', 'Base');
@@ -103,32 +208,37 @@ describe('scenario comparison', () => {
   });
 
   it('warns about and excludes a schedule with unpaid capital from every best-offer KPI', () => {
-    const unpaidMortgage = mortgage('unpaid', 1, [
-      {
-        ...scenario('unpaid-base', 'Saldo pendiente', [
-          {
-            id: 'extra',
-            name: 'Extra',
-            active: true,
-            type: 'single',
-            reductionType: 'payment',
-            amount: 1,
-            month: 1,
-          },
-        ]),
-        bonuses: [
-          {
-            id: 'temporary',
-            name: 'Bono temporal',
-            active: true,
-            interestReduction: 100,
-            annualCost: 0,
-            startMonth: 1,
-            endMonth: 1,
-          },
-        ],
-      },
-    ], 10000);
+    const unpaidMortgage = mortgage(
+      'unpaid',
+      1,
+      [
+        {
+          ...scenario('unpaid-base', 'Saldo pendiente', [
+            {
+              id: 'extra',
+              name: 'Extra',
+              active: true,
+              type: 'single',
+              reductionType: 'payment',
+              amount: 1,
+              month: 1,
+            },
+          ]),
+          bonuses: [
+            {
+              id: 'temporary',
+              name: 'Bono temporal',
+              active: true,
+              interestReduction: 100,
+              annualCost: 0,
+              startMonth: 1,
+              endMonth: 1,
+            },
+          ],
+        },
+      ],
+      10000,
+    );
     unpaidMortgage.interestRate = 100;
     const paidMortgage = mortgage('paid', 1, [scenario('paid-base', 'Cancelada')], 10000);
     paidMortgage.interestRate = 0;

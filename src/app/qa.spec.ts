@@ -621,14 +621,14 @@ describe('QA: gestión de escenarios', () => {
     workspace.editMortgage(mortgage, 'base');
     fixture.detectChanges();
 
-    const selector = fixture.nativeElement.querySelector(
-      'select[aria-label="Seleccionar escenario"]',
-    ) as HTMLSelectElement;
-    selector.value = 'alternative';
-    selector.dispatchEvent(new Event('change'));
+    const variant = fixture.nativeElement.querySelector(
+      '.portfolio-variant',
+    ) as HTMLButtonElement;
+    variant.click();
     fixture.detectChanges();
 
     const editorText = fixture.nativeElement.querySelector('.mortgage-editor').textContent;
+    expect(fixture.nativeElement.querySelector('select[aria-label="Seleccionar escenario"]')).toBeNull();
     expect(workspace.selectedScenarioId()).toBe('alternative');
     expect(editorText).toContain('Bono alternativo');
     expect(editorText).not.toContain('Bono base');

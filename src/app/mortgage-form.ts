@@ -2,6 +2,7 @@ import { DecimalPipe } from '@angular/common';
 import { Component, EventEmitter, Input, Output } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MatCheckboxModule } from '@angular/material/checkbox';
+import { MatIconModule } from '@angular/material/icon';
 import {
   Amortization,
   Mortgage,
@@ -29,11 +30,11 @@ const currencyFormatter = new Intl.NumberFormat('es-ES', {
   minimumFractionDigits: 2,
   maximumFractionDigits: 2,
 });
-const amortizationColors = ['#007f73', '#df765d', '#586b9c', '#d3a347', '#9b6db0', '#5a9bb5'];
+const amortizationColors = ['#dcc084', '#8bbde0', '#8fc8aa', '#ee9c96', '#c7a6c9', '#aeb8c4'];
 
 @Component({
   selector: 'app-mortgage-form',
-  imports: [DecimalPipe, FormsModule, MatCheckboxModule],
+  imports: [DecimalPipe, FormsModule, MatCheckboxModule, MatIconModule],
   templateUrl: './mortgage-form.html',
 })
 export class MortgageFormComponent {

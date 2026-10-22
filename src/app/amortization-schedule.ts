@@ -22,8 +22,8 @@ import { ChartViewportComponent } from './chart-viewport';
 
 Chart.register(BarController, BarElement, CategoryScale, Legend, LinearScale, Tooltip);
 
-const chartColors = ['#007f73', '#df765d', '#586b9c'];
-const amortizationColors = ['#007f73', '#df765d', '#586b9c', '#d3a347', '#9b6db0', '#5a9bb5'];
+const chartColors = ['#dcc084', '#8bbde0', '#8fc8aa'];
+const amortizationColors = ['#dcc084', '#8bbde0', '#8fc8aa', '#ee9c96', '#c7a6c9', '#aeb8c4'];
 const currencyFormatter = new Intl.NumberFormat('es-ES', {
   style: 'currency',
   currency: 'EUR',

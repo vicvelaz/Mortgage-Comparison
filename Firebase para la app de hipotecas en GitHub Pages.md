@@ -22,27 +22,11 @@ Recomendación: **Firebase Spark (gratuito) con login de Google y Firestore en u
 4. **Restricciones de la key.** Limitarla al dominio `vicvelaz.github.io` y añadir ese dominio a los autorizados de Authentication.
 5. **Login por redirección en GitHub Pages.** Algunos navegadores bloquean el almacenamiento de terceros; conviene probar el login con ventana emergente. No se ha verificado en esta consulta.
 
-### Ejemplo orientativo de reglas
+### Reglas
 
-Probarlas con el Local Emulator Suite antes de publicarlas.
-
-```
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    match /users/{uid}/mortgages/{mortgageId} {
-      allow read, delete: if request.auth != null && request.auth.uid == uid;
-      allow create, update: if request.auth != null && request.auth.uid == uid
-        && request.resource.data.name is string
-        && request.resource.data.name.size() <= 100
-        && request.resource.data.amount is number;
-    }
-    match /{document=**} {
-      allow read, write: if false;
-    }
-  }
-}
-```
+Las reglas completas y sus pruebas están en [`firestore.rules`](firestore.rules) y
+[`firebase-tests/firestore.rules.spec.ts`](firebase-tests/firestore.rules.spec.ts).
+Se prueban con el Local Emulator Suite antes de publicarlas.
 
 ## Límites gratuitos de Firebase (plan Spark)
 
@@ -55,30 +39,33 @@ service cloud.firestore {
 
 ## Alternativas gratuitas
 
-| Opción | Qué ofrece gratis | Principal problema |
-| --- | --- | --- |
-| **Firebase (Spark)** | Firestore 1 GB, Auth 50.000 usuarios, sin tarjeta | Datos propietarios; límites duros |
-| **Supabase** | Postgres de código abierto, 500 MB, 50.000 usuarios | Pausa el proyecto tras 7 días sin actividad y hay que reactivarlo a mano |
-| **Cloudflare Workers + D1** | 5 M lecturas/día, 100.000 escrituras/día, 5 GB | Hay que construir el backend y el login; la CPU gratuita (10 ms por petición) no permite hashear contraseñas, así que solo valdría un proveedor externo; desde el 1 de septiembre de 2026 las consultas fallan al superar el límite diario |
-| **Appwrite, PocketBase, Convex, Turso** | No verificado | No se han comprobado sus condiciones gratuitas actuales |
-| **Sin backend (Google Drive del usuario)** | Gratis, sin gestionar usuarios | Sincronización más frágil; no verificado |
+| Opción                                     | Qué ofrece gratis                                   | Principal problema                                                                                                                                                                                                                         |
+| ------------------------------------------ | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **Firebase (Spark)**                       | Firestore 1 GB, Auth 50.000 usuarios, sin tarjeta   | Datos propietarios; límites duros                                                                                                                                                                                                          |
+| **Supabase**                               | Postgres de código abierto, 500 MB, 50.000 usuarios | Pausa el proyecto tras 7 días sin actividad y hay que reactivarlo a mano                                                                                                                                                                   |
+| **Cloudflare Workers + D1**                | 5 M lecturas/día, 100.000 escrituras/día, 5 GB      | Hay que construir el backend y el login; la CPU gratuita (10 ms por petición) no permite hashear contraseñas, así que solo valdría un proveedor externo; desde el 1 de septiembre de 2026 las consultas fallan al superar el límite diario |
+| **Appwrite, PocketBase, Convex, Turso**    | No verificado                                       | No se han comprobado sus condiciones gratuitas actuales                                                                                                                                                                                    |
+| **Sin backend (Google Drive del usuario)** | Gratis, sin gestionar usuarios                      | Sincronización más frágil; no verificado                                                                                                                                                                                                   |
 
 Para una app de uso esporádico, la pausa de Supabase es el motivo principal para descartarlo.
 
 ## Diseño propuesto
 
-- Un documento por hipoteca en `users/{uid}/mortgages/{id}`, con el modelo v2 actual (escenarios y comisiones incluidos). Guardar solo datos de entrada, no los calendarios calculados.
+- Un documento raíz por hipoteca en `users/{uid}/mortgages/{id}` y subcolecciones para escenarios, bonificaciones, amortizaciones y tramos de comisión. Guardar solo datos de entrada, no los calendarios calculados. La guía de despliegue está en [`docs/firebase-setup.md`](docs/firebase-setup.md).
 - Mantener `localStorage` como caché y como modo sin cuenta.
 - Al primer login, ofrecer subir los datos locales y resolver conflictos por `updatedAt`.
 - Elegir una región europea para Firestore: los usuarios están en España y son datos financieros personales.
 - Las ofertas son pequeñas, así que el límite de 1 GB no sería un problema realista.
 
-## Siguientes pasos
+## Activar la funcionalidad implementada
 
-1. Crear el proyecto de Firebase en el plan Spark, con Firestore en región europea y Authentication con Google.
-2. Escribir las reglas de seguridad y probarlas con el emulador.
-3. Activar App Check y restringir la API key al dominio de GitHub Pages.
-4. Preparar las specs de OpenSpec y el prompt de implementación de la migración desde `localStorage`.
+La integración de autenticación, caché y sincronización está implementada. Para
+conectarla a un proyecto real, sigue la guía de [configuración de Firebase](docs/firebase-setup.md):
+crea Firestore y el proveedor Google, configura App Check, guarda los valores
+públicos de la aplicación web en `src/app/firebase-config.ts`, despliega las reglas
+y publica el build. No se deben generar ni copiar tokens de acceso al código; los
+SDK los gestionan durante la sesión. La configuración actual mantiene Firebase
+desactivado hasta que se rellenen esos valores.
 
 ## Fuentes consultadas
 

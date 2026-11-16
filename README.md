@@ -58,6 +58,13 @@ To build locally for GitHub Pages, use:
 npx ng build --base-href=/Mortgage-Comparison/
 ```
 
+To connect the optional Google sign-in and Firestore sync, create a Firebase
+project and configure its public web settings and App Check site key in
+[`src/app/firebase-config.ts`](src/app/firebase-config.ts). The full developer
+setup, including authorized domains, Firestore rules, tests, and deployment, is
+documented in [`docs/firebase-setup.md`](docs/firebase-setup.md). The app remains
+local-only while the Firebase configuration is `null`.
+
 ## Running unit tests
 
 To execute unit tests with the [Vitest](https://vitest.dev/) test runner, use the following command:

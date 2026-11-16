@@ -21,7 +21,13 @@
 
     <div class="sidebar-bottom">
       <span class="privacy-dot"></span>
-      <div><strong>Datos privados</strong><small>Guardados en este dispositivo</small></div>
+      <div>
+        @if (authentication().kind === 'authenticated' && accountSyncActive()) {
+          <strong>Cuenta sincronizada</strong><small>Caché local por usuario</small>
+        } @else {
+          <strong>Modo invitado</strong><small>Guardados en este dispositivo</small>
+        }
+      </div>
     </div>
   </aside>
 
@@ -39,6 +45,42 @@
       </div>
       <div class="top-actions">
         <span class="save-status"><i></i>{{ status() }}</span>
+        @if (authentication().kind === 'authenticated') {
+          @if (accountSyncActive()) {
+            <span class="account-label">{{ accountEmail }}</span>
+            <span class="cloud-status" [attr.data-state]="cloudStatus().kind">
+              {{ cloudStatus().message }}
+            </span>
+          } @else {
+            <button class="button button-outline" type="button" (click)="retryAccountSync()">
+              Sincronizar cuenta
+            </button>
+          }
+          <button class="button button-outline account-action" type="button" (click)="signOut()">
+            Cerrar sesión
+          </button>
+        } @else {
+          <button
+            class="button button-outline account-action"
+            type="button"
+            [disabled]="authentication().kind === 'loading'"
+            (click)="signInWithGoogle()"
+          >
+            @if (authentication().kind === 'loading') {
+              Conectando…
+            } @else {
+              Iniciar con Google
+            }
+          </button>
+          <button
+            class="button guest-action"
+            type="button"
+            (click)="continueAsGuest()"
+            aria-label="Continuar como invitado"
+          >
+            Continuar como invitado
+          </button>
+        }
         <button
           class="icon-button"
           type="button"
@@ -682,6 +724,40 @@
     <p class="empty-state">Crea tu primera oferta para comenzar la comparación.</p>
   }
 </ng-template>
+
+@if (reconciliation(); as choice) {
+  <div class="sync-dialog-backdrop">
+    <section
+      class="sync-dialog"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="sync-dialog-title"
+    >
+      <p class="eyebrow">SINCRONIZACIÓN DE CUENTA</p>
+      <h2 id="sync-dialog-title">Combinar tus ofertas</h2>
+      <p>
+        Se combinarán {{ choice.guest.length }} ofertas de invitado y
+        {{ choice.account.length }} ofertas de la cuenta. Si un identificador coincide, se conserva
+        la versión más reciente; en caso de empate, prevalece la de la cuenta.
+      </p>
+      <p class="sync-dialog-note">
+        Tus ofertas de invitado permanecerán guardadas en este dispositivo. No se modificará nada en
+        la nube hasta que confirmes.
+      </p>
+      <div class="sync-dialog-actions">
+        <button class="button button-primary" type="button" (click)="confirmAccountTransfer()">
+          Combinar y sincronizar
+        </button>
+        <button class="button button-outline" type="button" (click)="deferAccountTransfer()">
+          Ahora no
+        </button>
+        <button class="text-link" type="button" (click)="cancelAccountTransfer()">
+          Cancelar inicio y continuar como invitado
+        </button>
+      </div>
+    </section>
+  </div>
+}
 
 <ng-template #selectionRow let-item let-picker="picker" let-base="base">
   <div [class]="picker ? 'picker-item' : 'selection-row'">

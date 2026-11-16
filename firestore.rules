@@ -1,0 +1,178 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function owns(uid) {
+      return request.auth != null && request.auth.uid == uid;
+    }
+
+    function validText(value, maximum) {
+      return value is string && value.size() > 0 && value.size() <= maximum;
+    }
+
+    function validPositiveInteger(value) {
+      return value is int && value >= 1;
+    }
+
+    function activeGenerationAfter(uid, mortgageId, generation) {
+      let rootPath = /databases/$(database)/documents/users/$(uid)/mortgages/$(mortgageId);
+      return existsAfter(rootPath) && getAfter(rootPath).data.generation == generation;
+    }
+
+    function validRoot(data, mortgageId) {
+      return data is map
+        && data.keys().hasAll([
+          'id', 'name', 'bank', 'amount', 'years', 'interestRate', 'rateType', 'generation', 'updatedAt'
+        ])
+        && data.keys().hasOnly([
+          'id', 'name', 'bank', 'amount', 'years', 'interestRate', 'rateType', 'generation', 'startDate', 'updatedAt'
+        ])
+        && data.id == mortgageId
+        && validText(data.id, 128)
+        && validText(data.name, 200)
+        && validText(data.bank, 200)
+        && data.amount is number
+        && data.amount > 0
+        && data.years is number
+        && data.years >= 1
+        && data.years <= 50
+        && data.interestRate is number
+        && data.interestRate >= 0
+        && (data.rateType == 'fixed' || data.rateType == 'variable')
+        && validText(data.generation, 128)
+        && (!('startDate' in data) || validText(data.startDate, 32))
+        && validText(data.updatedAt, 40);
+    }
+
+    function validScenario(data) {
+      return data is map
+        && data.keys().hasAll(['id', 'generation', 'index', 'name', 'mode'])
+        && data.keys().hasOnly(['id', 'generation', 'index', 'name', 'mode', 'monthlyBudget'])
+        && validText(data.id, 128)
+        && validText(data.generation, 128)
+        && data.index is int
+        && data.index >= 0
+        && data.index < 8
+        && validText(data.name, 200)
+        && (data.mode == 'reduceInstallment' || data.mode == 'reduceTerm')
+        && (!('monthlyBudget' in data) || validBudget(data.monthlyBudget));
+    }
+
+    function validBudget(data) {
+      return data is map
+        && data.keys().hasAll(['amount', 'startMonth'])
+        && data.keys().hasOnly(['amount', 'startMonth', 'endMonth'])
+        && data.amount is number
+        && data.amount > 0
+        && validPositiveInteger(data.startMonth)
+        && (!('endMonth' in data)
+          || (validPositiveInteger(data.endMonth) && data.endMonth >= data.startMonth));
+    }
+
+    function validBonus(data) {
+      return data is map
+        && data.keys().hasAll(['id', 'generation', 'index', 'name', 'active', 'interestReduction', 'annualCost'])
+        && data.keys().hasOnly([
+          'id', 'generation', 'index', 'name', 'active', 'interestReduction', 'annualCost', 'startMonth', 'endMonth'
+        ])
+        && validText(data.id, 128)
+        && validText(data.generation, 128)
+        && data.index is int
+        && data.index >= 0
+        && data.index < 16
+        && validText(data.name, 200)
+        && data.active is bool
+        && data.interestReduction is number
+        && data.interestReduction >= 0
+        && data.annualCost is number
+        && data.annualCost >= 0
+        && (!('startMonth' in data) || validPositiveInteger(data.startMonth))
+        && (!('endMonth' in data)
+          || (validPositiveInteger(data.endMonth)
+            && data.endMonth >= (('startMonth' in data) ? data.startMonth : 1)));
+    }
+
+    function validAmortization(data) {
+      return data is map
+        && data.keys().hasAll([
+          'id', 'generation', 'index', 'name', 'active', 'type', 'reductionType', 'amount', 'month'
+        ])
+        && data.keys().hasOnly([
+          'id', 'generation', 'index', 'name', 'active', 'type', 'reductionType', 'amount', 'month', 'frequencyMonths'
+        ])
+        && validText(data.id, 128)
+        && validText(data.generation, 128)
+        && data.index is int
+        && data.index >= 0
+        && data.index < 32
+        && validText(data.name, 200)
+        && data.active is bool
+        && (data.type == 'single' || data.type == 'recurring')
+        && (data.reductionType == 'term' || data.reductionType == 'payment')
+        && data.amount is number
+        && data.amount > 0
+        && validPositiveInteger(data.month)
+        && data.month <= 600
+        && (!('frequencyMonths' in data)
+          || (validPositiveInteger(data.frequencyMonths) && data.frequencyMonths <= 600))
+        && (data.type != 'recurring' || 'frequencyMonths' in data);
+    }
+
+    function validFee(data) {
+      return data is map
+        && data.keys().hasAll(['generation', 'kind', 'index', 'fromMonth', 'percent'])
+        && data.keys().hasOnly(['generation', 'kind', 'index', 'fromMonth', 'toMonth', 'percent'])
+        && validText(data.generation, 128)
+        && (data.kind == 'partial' || data.kind == 'total')
+        && data.index is int
+        && data.index >= 0
+        && data.index < 20
+        && validPositiveInteger(data.fromMonth)
+        && data.percent is number
+        && data.percent >= 0
+        && (!('toMonth' in data)
+          || (validPositiveInteger(data.toMonth) && data.toMonth >= data.fromMonth));
+    }
+
+    match /users/{uid}/mortgages/{mortgageId} {
+      allow get, list: if owns(uid);
+      allow create, update: if owns(uid) && validRoot(request.resource.data, mortgageId);
+      allow delete: if owns(uid);
+
+      match /scenarios/{scenarioId} {
+        allow get, list: if owns(uid);
+        allow create, update: if owns(uid)
+          && validScenario(request.resource.data)
+          && activeGenerationAfter(uid, mortgageId, request.resource.data.generation);
+        allow delete: if owns(uid);
+
+        match /bonuses/{bonusId} {
+          allow get, list: if owns(uid);
+          allow create, update: if owns(uid)
+            && validBonus(request.resource.data)
+            && activeGenerationAfter(uid, mortgageId, request.resource.data.generation);
+          allow delete: if owns(uid);
+        }
+
+        match /amortizations/{amortizationId} {
+          allow get, list: if owns(uid);
+          allow create, update: if owns(uid)
+            && validAmortization(request.resource.data)
+            && activeGenerationAfter(uid, mortgageId, request.resource.data.generation);
+          allow delete: if owns(uid);
+        }
+      }
+
+      match /cancellationFees/{feeId} {
+        allow get, list: if owns(uid);
+        allow create, update: if owns(uid)
+          && validFee(request.resource.data)
+          && activeGenerationAfter(uid, mortgageId, request.resource.data.generation);
+        allow delete: if owns(uid);
+      }
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

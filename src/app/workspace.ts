@@ -6,6 +6,7 @@ import {
   OnDestroy,
   ViewChild,
   computed,
+  effect,
   signal,
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -44,6 +45,12 @@ import {
   serializeMortgages,
 } from './mortgage-storage';
 import { validateMortgage } from './mortgage-validation';
+import {
+  FirebaseAuthService,
+  type FirebaseAuthState,
+  type FirebaseUserSummary,
+} from './firebase-auth';
+import { FirebaseMortgageSyncService, reconcileGuestOffers } from './firebase-mortgage-sync';
 const currencyFormatter = new Intl.NumberFormat('es-ES', {
   style: 'currency',
   currency: 'EUR',
@@ -74,6 +81,19 @@ interface ScenarioResult {
   scenario: Scenario;
   result: MortgageResult;
 }
+
+interface AccountReconciliation {
+  uid: string;
+  guest: Mortgage[];
+  account: Mortgage[];
+  merged: Mortgage[];
+  transfer: Mortgage[];
+}
+
+type CloudMutation =
+  | { kind: 'upsert'; mortgage: Mortgage }
+  | { kind: 'delete'; mortgageId: string }
+  | { kind: 'replace'; previous: Mortgage[]; updatedAt: string };
 
 export function comparisonMonthLabels(results: readonly { result: MortgageResult }[]): number[] {
   const longest = results.reduce<MortgageResult | null>(
@@ -114,6 +134,10 @@ function differenceInCents(left: number, right: number): number {
   return (Math.round(left * 100) - Math.round(right * 100)) / 100;
 }
 
+function readableError(error: unknown): string {
+  return error instanceof Error ? error.message : 'Error desconocido.';
+}
+
 @Component({
   selector: 'app-workspace',
   imports: [
@@ -147,6 +171,8 @@ export class Workspace implements AfterViewInit, OnDestroy {
   readonly status = signal(
     this.initialLoad.notice ?? 'Tus datos se guardan automáticamente en este dispositivo.',
   );
+  readonly reconciliation = signal<AccountReconciliation | null>(null);
+  readonly accountSyncActive = signal(false);
   readonly mortgageResults = computed(() =>
     this.mortgages().flatMap((mortgage) =>
       mortgage.scenarios.map((scenario) => ({
@@ -238,8 +264,29 @@ export class Workspace implements AfterViewInit, OnDestroy {
   private overviewChart: ChartInstance<'line'> | null = null;
   private comparisonChart: ChartInstance<'line'> | null = null;
   private costChart: ChartInstance<'bar'> | null = null;
+  private activeAccountUid: string | null = null;
+  private deferredAccountUid: string | null = null;
+  private accountTransition = 0;
+  private previousAuthKind: FirebaseAuthState['kind'] | null = null;
 
-  constructor(private readonly router: Router) {
+  get authentication() {
+    return this.firebaseAuth.state;
+  }
+
+  get cloudStatus() {
+    return this.cloudSync.status;
+  }
+
+  get accountEmail(): string | null {
+    const state = this.firebaseAuth.state();
+    return state.kind === 'authenticated' ? state.user.email : null;
+  }
+
+  constructor(
+    private readonly router: Router,
+    private readonly firebaseAuth: FirebaseAuthService,
+    private readonly cloudSync: FirebaseMortgageSyncService,
+  ) {
     this.activeView.set(this.viewFromUrl());
     this.router.events
       .pipe(
@@ -247,6 +294,23 @@ export class Workspace implements AfterViewInit, OnDestroy {
         takeUntilDestroyed(),
       )
       .subscribe(() => this.activeView.set(this.viewFromUrl()));
+    effect(() => {
+      const state = this.firebaseAuth.state();
+      const previousState = this.previousAuthKind;
+      this.previousAuthKind = state.kind;
+      if (state.kind === 'authenticated') {
+        void this.connectAccount(state.user);
+      } else if (state.kind === 'guest') {
+        this.accountTransition += 1;
+        this.activeAccountUid = null;
+        this.accountSyncActive.set(false);
+        this.reconciliation.set(null);
+        this.cloudSync.stop();
+        if (previousState === 'authenticated' || previousState === 'loading') {
+          this.loadGuestData();
+        }
+      }
+    });
   }
 
   ngAfterViewInit(): void {
@@ -257,6 +321,64 @@ export class Workspace implements AfterViewInit, OnDestroy {
     this.overviewChart?.destroy();
     this.comparisonChart?.destroy();
     this.costChart?.destroy();
+    this.cloudSync.stop();
+  }
+
+  async signInWithGoogle(): Promise<void> {
+    const result = await this.firebaseAuth.signInWithGoogle();
+    if (result === 'unavailable') {
+      this.status.set('La sincronización no está configurada; puedes seguir como invitado.');
+    } else if (result === 'cancelled' || result === 'error') {
+      const state = this.firebaseAuth.state();
+      this.status.set(
+        state.kind === 'cancelled' || state.kind === 'error'
+          ? state.message
+          : 'No se inició sesión.',
+      );
+    }
+  }
+
+  async signOut(): Promise<void> {
+    this.cloudSync.stop();
+    this.activeAccountUid = null;
+    this.accountSyncActive.set(false);
+    this.reconciliation.set(null);
+    await this.firebaseAuth.signOut();
+  }
+
+  retryAccountSync(): void {
+    const state = this.firebaseAuth.state();
+    if (state.kind !== 'authenticated') return;
+    this.deferredAccountUid = null;
+    void this.connectAccount(state.user, true);
+  }
+
+  confirmAccountTransfer(): void {
+    const reconciliation = this.reconciliation();
+    if (!reconciliation) return;
+    this.reconciliation.set(null);
+    this.activateAccount(reconciliation.uid, reconciliation.merged, reconciliation.transfer);
+  }
+
+  deferAccountTransfer(): void {
+    const reconciliation = this.reconciliation();
+    if (!reconciliation) return;
+    this.deferredAccountUid = reconciliation.uid;
+    this.reconciliation.set(null);
+    this.status.set('La conciliación se aplazó. Tus ofertas invitadas no se han modificado.');
+  }
+
+  cancelAccountTransfer(): void {
+    this.status.set('Inicio cancelado. Sigues como invitado y tus ofertas locales se conservan.');
+    void this.signOut();
+  }
+
+  continueAsGuest(): void {
+    if (this.authentication().kind === 'authenticated') {
+      this.cancelAccountTransfer();
+      return;
+    }
+    this.status.set('Modo invitado: tus ofertas se guardan en este dispositivo.');
   }
 
   setView(view: ViewName): void {
@@ -304,7 +426,7 @@ export class Workspace implements AfterViewInit, OnDestroy {
     this.draft = structuredClone(saved);
     this.editingId.set(saved.id);
     this.status.set('Oferta guardada.');
-    this.commitChanges();
+    this.commitChanges({ kind: 'upsert', mortgage: saved });
   }
 
   activeScenario(): Scenario | null {
@@ -400,7 +522,7 @@ export class Workspace implements AfterViewInit, OnDestroy {
       this.selectedScenarioId.set(this.draft.scenarios[0].id);
     }
     this.status.set('Oferta eliminada.');
-    this.commitChanges();
+    this.commitChanges({ kind: 'delete', mortgageId: mortgage.id });
   }
 
   toggleComparison(mortgageId: string, scenarioId: string, checked: boolean): void {
@@ -492,8 +614,8 @@ export class Workspace implements AfterViewInit, OnDestroy {
         this.status.set(`No se pudo importar. ${result.error}`);
         return;
       }
-      const mortgages = result.value;
       const currentMortgages = this.mortgages();
+      const importedMortgages = result.value;
       if (
         currentMortgages.length > 0 &&
         !window.confirm(
@@ -503,6 +625,10 @@ export class Workspace implements AfterViewInit, OnDestroy {
         this.status.set('Importación cancelada.');
         return;
       }
+      const updatedAt = new Date().toISOString();
+      const mortgages = this.activeAccountUid
+        ? importedMortgages.map((mortgage) => ({ ...mortgage, updatedAt }))
+        : importedMortgages;
       this.mortgages.set(mortgages);
       this.selectedIds.set(
         mortgages
@@ -515,7 +641,7 @@ export class Workspace implements AfterViewInit, OnDestroy {
       this.draft = emptyMortgage();
       this.selectedScenarioId.set(this.draft.scenarios[0].id);
       this.status.set('Importación completada.');
-      this.commitChanges();
+      this.commitChanges({ kind: 'replace', previous: currentMortgages, updatedAt });
     } catch {
       this.status.set('No se pudo leer el archivo seleccionado.');
     } finally {
@@ -540,12 +666,142 @@ export class Workspace implements AfterViewInit, OnDestroy {
     );
   }
 
-  private commitChanges(): void {
+  private async connectAccount(user: FirebaseUserSummary, force = false): Promise<void> {
+    if (this.activeAccountUid === user.uid && this.accountSyncActive()) return;
+    if (!force && this.deferredAccountUid === user.uid) return;
+    if (this.activeAccountUid !== user.uid) {
+      this.cloudSync.stop();
+      this.activeAccountUid = null;
+      this.accountSyncActive.set(false);
+    }
+    const transition = ++this.accountTransition;
+    const guest = loadMortgages(localStorage).mortgages;
     try {
-      localStorage.setItem(STORAGE_KEY, serializeMortgages(this.mortgages()));
-    } catch {
+      const account = await this.cloudSync.previewAccount(user.uid);
+      if (transition !== this.accountTransition) return;
+      if (guest.length > 0) {
+        const merge = reconcileGuestOffers(
+          guest,
+          account,
+          this.cloudSync.pendingOperations(user.uid),
+        );
+        this.mortgages.set(guest);
+        this.reconciliation.set({
+          uid: user.uid,
+          guest,
+          account,
+          merged: merge.merged,
+          transfer: merge.transfer,
+        });
+        this.status.set('Elige cómo combinar tus ofertas de invitado con la cuenta.');
+        return;
+      }
+      this.activateAccount(user.uid, account, []);
+    } catch (error) {
+      if (transition !== this.accountTransition) return;
+      let cached: Mortgage[] | null;
+      try {
+        cached = this.cloudSync.cachedView(user.uid);
+      } catch (cacheError) {
+        this.status.set(`No se pudo leer la caché de la cuenta. ${readableError(cacheError)}`);
+        return;
+      }
+      if (cached && guest.length === 0) {
+        this.activateAccount(user.uid, cached, []);
+        this.status.set(
+          `Se usa la caché local de la cuenta; la nube no está disponible. ${readableError(error)}`,
+        );
+      } else {
+        this.status.set(
+          `No se pudo consultar la cuenta. Tus ofertas de invitado siguen intactas. ${readableError(error)}`,
+        );
+      }
+    }
+  }
+
+  private activateAccount(uid: string, mortgages: Mortgage[], transfer: Mortgage[]): void {
+    try {
+      this.cloudSync.activate(uid, mortgages, transfer, (updated) => this.showMortgages(updated));
+    } catch (error) {
+      this.activeAccountUid = null;
+      this.accountSyncActive.set(false);
       this.status.set(
-        'No se pudo guardar en este dispositivo. Exporta los escenarios para conservarlos.',
+        `No se pudo activar la sincronización. Tus datos no se han enviado. ${readableError(error)}`,
+      );
+      return;
+    }
+    this.deferredAccountUid = null;
+    this.activeAccountUid = uid;
+    this.accountSyncActive.set(true);
+    this.reconciliation.set(null);
+    this.showMortgages(mortgages);
+  }
+
+  private showMortgages(mortgages: Mortgage[]): void {
+    this.mortgages.set(mortgages);
+    const available = new Set(
+      mortgages.flatMap((mortgage) =>
+        mortgage.scenarios.map((scenario) => scenarioKey(mortgage.id, scenario.id)),
+      ),
+    );
+    this.selectedIds.update((ids) => {
+      const retained = ids.filter((id) => available.has(id));
+      return retained.length
+        ? retained
+        : mortgages
+            .slice(0, 2)
+            .flatMap((mortgage) =>
+              mortgage.scenarios
+                .slice(0, 1)
+                .map((scenario) => scenarioKey(mortgage.id, scenario.id)),
+            );
+    });
+    if (
+      !mortgages.some((mortgage) =>
+        mortgage.scenarios.some((scenario) => scenario.id === this.selectedScenarioId()),
+      )
+    ) {
+      this.selectedScenarioId.set(mortgages[0]?.scenarios[0]?.id ?? '');
+    }
+  }
+
+  private loadGuestData(): void {
+    const loaded = loadMortgages(localStorage);
+    this.showMortgages(loaded.mortgages);
+    if (loaded.notice) this.status.set(loaded.notice);
+  }
+
+  private commitChanges(mutation?: CloudMutation): void {
+    try {
+      if (this.activeAccountUid) {
+        if (!mutation) throw new Error('Falta el tipo de cambio de la cuenta.');
+        if (mutation.kind === 'upsert') {
+          this.cloudSync.recordUpsert(this.activeAccountUid, mutation.mortgage, this.mortgages());
+        } else if (mutation.kind === 'delete') {
+          this.cloudSync.recordDelete(
+            this.activeAccountUid,
+            mutation.mortgageId,
+            new Date().toISOString(),
+            this.mortgages(),
+          );
+        } else {
+          const currentIds = new Set(this.mortgages().map((mortgage) => mortgage.id));
+          const deletedIds = mutation.previous
+            .filter((mortgage) => !currentIds.has(mortgage.id))
+            .map((mortgage) => mortgage.id);
+          this.cloudSync.recordReplacement(
+            this.activeAccountUid,
+            this.mortgages(),
+            deletedIds,
+            mutation.updatedAt,
+          );
+        }
+      } else {
+        localStorage.setItem(STORAGE_KEY, serializeMortgages(this.mortgages()));
+      }
+    } catch (error) {
+      this.status.set(
+        `No se pudo guardar en este dispositivo. Exporta los escenarios para conservarlos. ${readableError(error)}`,
       );
     }
     this.refreshCharts();

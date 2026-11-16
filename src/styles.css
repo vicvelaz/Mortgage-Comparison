@@ -1970,6 +1970,99 @@ summary:focus-visible,
   .topbar {
     padding-inline: 10px;
   }
+
+  .account-label,
+  .cloud-status {
+    max-width: 180px;
+    overflow: hidden;
+    color: #647472;
+    font-size: 10px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .cloud-status[data-state='pending'],
+  .cloud-status[data-state='error'] {
+    color: #a45b54;
+  }
+  .guest-action {
+    max-width: 150px;
+    overflow: hidden;
+    min-height: 34px;
+    padding: 0 8px;
+    color: #647472;
+    background: transparent;
+    border: 0;
+    cursor: pointer;
+    font-size: 10px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .sync-dialog-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 20;
+    display: grid;
+    place-items: center;
+    padding: 20px;
+    background: rgba(15, 17, 18, 0.72);
+  }
+  .sync-dialog {
+    width: min(100%, 520px);
+    padding: 30px;
+    color: var(--ink);
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    box-shadow: 0 20px 70px rgba(0, 0, 0, 0.35);
+  }
+  .sync-dialog h2 {
+    margin: 8px 0 14px;
+  }
+  .sync-dialog p {
+    color: var(--muted);
+    font-size: 13px;
+    line-height: 1.6;
+  }
+  .sync-dialog .sync-dialog-note {
+    padding: 12px;
+    background: var(--paper);
+    border-radius: 5px;
+  }
+  .sync-dialog-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px;
+    margin-top: 20px;
+  }
+  .sync-dialog-actions .text-link {
+    padding: 8px 0;
+    color: var(--muted);
+    background: none;
+    border: 0;
+    cursor: pointer;
+    font-size: 11px;
+  }
+
+  @media (max-width: 760px) {
+    .account-label,
+    .cloud-status {
+      display: none;
+    }
+    .account-action {
+      max-width: 92px;
+      overflow: hidden;
+      padding-inline: 7px;
+      text-overflow: ellipsis;
+    }
+    .guest-action {
+      max-width: 92px;
+      padding-inline: 5px;
+    }
+    .sync-dialog {
+      padding: 22px;
+    }
+  }
   .top-actions .button {
     padding-inline: 8px;
     font-size: 9px;

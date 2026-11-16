@@ -13,9 +13,10 @@ import {
   type Firestore,
   type QueryDocumentSnapshot,
 } from 'firebase/firestore';
-import { createId, type Mortgage, type Scenario } from './mortgage-calculator';
-import { initializeFirebaseApp } from './firebase-app';
-import { validateMortgage } from './mortgage-validation';
+import { createId } from '../../domain/mortgage/mortgage-calculator';
+import type { Mortgage, Scenario } from '../../domain/mortgage/mortgage.model';
+import { initializeFirebaseApp } from '../../core/firebase/firebase-app';
+import { validateMortgage } from '../../domain/mortgage/mortgage-validation';
 
 const MAX_BATCH_WRITES = 450;
 const MAX_SCENARIOS = 8;

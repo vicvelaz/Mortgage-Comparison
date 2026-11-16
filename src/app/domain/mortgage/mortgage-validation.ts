@@ -1,5 +1,5 @@
 import { maxAmortizableAt, RECURRING_OVERFLOW_POLICY } from './mortgage-calculator';
-import type { Mortgage, Scenario } from './mortgage-calculator';
+import type { Mortgage, Scenario } from './mortgage.model';
 import { MAX_TERM_YEARS } from './mortgage-constants';
 
 export { MAX_TERM_YEARS } from './mortgage-constants';

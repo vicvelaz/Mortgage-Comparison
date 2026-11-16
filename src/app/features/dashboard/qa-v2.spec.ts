@@ -1,11 +1,17 @@
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
-import { routes } from './app.routes';
+import { routes } from '../../app.routes';
 import { Workspace, comparisonMonthLabels } from './workspace';
-import { MortgageFormComponent } from './mortgage-form';
-import { calculateMortgage, maxAmortizableAt } from './mortgage-calculator';
-import type { Mortgage } from './mortgage-calculator';
-import { STORAGE_KEY, LEGACY_STORAGE_KEY } from './mortgage-storage';
+import { MortgageFormComponent } from '../mortgages/mortgage-form/mortgage-form';
+import {
+  calculateMortgage,
+  maxAmortizableAt,
+} from '../../domain/mortgage/mortgage-calculator';
+import type { Mortgage } from '../../domain/mortgage/mortgage.model';
+import {
+  STORAGE_KEY,
+  LEGACY_STORAGE_KEY,
+} from '../../data-access/local-storage/mortgage-storage';
 import { vi } from 'vitest';
 
 type Fx = ReturnType<typeof TestBed.createComponent<Workspace>>;

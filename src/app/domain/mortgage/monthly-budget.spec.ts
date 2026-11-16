@@ -1,11 +1,12 @@
-import { calculateMortgage, maxAmortizableAt, Mortgage, Scenario } from './mortgage-calculator';
+import { calculateMortgage, maxAmortizableAt } from './mortgage-calculator';
+import type { Mortgage, Scenario } from './mortgage.model';
 import { validateMonthlyBudget, validateScenario } from './mortgage-validation';
 import {
   loadMortgages,
   parseMortgageFile,
   serializeMortgages,
   STORAGE_KEY,
-} from './mortgage-storage';
+} from '../../data-access/local-storage/mortgage-storage';
 
 function mortgage(overrides: Partial<Mortgage> = {}): Mortgage {
   const scenario: Scenario = {

@@ -1,9 +1,10 @@
 import { provideRouter } from '@angular/router';
 import { TestBed } from '@angular/core/testing';
 import { RouterTestingHarness } from '@angular/router/testing';
-import { routes } from './app.routes';
-import { calculateMortgage, Mortgage, Scenario } from './mortgage-calculator';
-import { comparisonMonthLabels, Workspace } from './workspace';
+import { routes } from '../../app.routes';
+import { calculateMortgage } from '../../domain/mortgage/mortgage-calculator';
+import type { Mortgage, Scenario } from '../../domain/mortgage/mortgage.model';
+import { comparisonMonthLabels, Workspace } from '../dashboard/workspace';
 
 function scenario(
   id: string,

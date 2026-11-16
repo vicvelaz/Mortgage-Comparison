@@ -1,5 +1,6 @@
 import { aggregatePaymentBreakdown } from './amortization-schedule';
-import { calculateMortgage, Mortgage, Scenario } from './mortgage-calculator';
+import { calculateMortgage } from '../../../domain/mortgage/mortgage-calculator';
+import type { Mortgage, Scenario } from '../../../domain/mortgage/mortgage.model';
 
 function mortgage(
   id: string,

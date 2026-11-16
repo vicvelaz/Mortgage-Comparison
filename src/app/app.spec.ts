@@ -3,16 +3,18 @@ import { provideRouter } from '@angular/router';
 import { App } from './app';
 import { routes } from './app.routes';
 import {
+  calculateMortgage as calculateScenario,
+  maxAmortizableAt,
+} from './domain/mortgage/mortgage-calculator';
+import type {
   Amortization,
   AmortizationMode,
   Bonus,
   Mortgage,
   Scenario,
-  calculateMortgage as calculateScenario,
-  maxAmortizableAt,
-} from './mortgage-calculator';
-import { validateScenario } from './mortgage-validation';
-import { ChartViewportComponent } from './chart-viewport';
+} from './domain/mortgage/mortgage.model';
+import { validateScenario } from './domain/mortgage/mortgage-validation';
+import { ChartViewportComponent } from './shared/chart-viewport/chart-viewport';
 
 describe('App', () => {
   beforeEach(async () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { Mortgage } from './mortgage-calculator';
+import type { Mortgage } from '../../domain/mortgage/mortgage.model';
 import {
   FirebaseMortgageSyncService,
   mergeMortgageCollections,

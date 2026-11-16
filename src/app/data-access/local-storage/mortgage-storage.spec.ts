@@ -1,4 +1,5 @@
-import { Mortgage, Scenario, calculateMortgage, maxAmortizableAt } from './mortgage-calculator';
+import { calculateMortgage, maxAmortizableAt } from '../../domain/mortgage/mortgage-calculator';
+import type { Mortgage, Scenario } from '../../domain/mortgage/mortgage.model';
 import {
   LEGACY_BACKUP_KEY,
   LEGACY_STORAGE_KEY,

@@ -62,7 +62,7 @@ Para una app de uso esporádico, la pausa de Supabase es el motivo principal par
 La integración de autenticación, caché y sincronización está implementada. Para
 conectarla a un proyecto real, sigue la guía de [configuración de Firebase](docs/firebase-setup.md):
 crea Firestore y el proveedor Google, configura App Check, guarda los valores
-públicos de la aplicación web en `src/app/firebase-config.ts`, despliega las reglas
+públicos de la aplicación web en `src/app/core/firebase/firebase-config.ts`, despliega las reglas
 y publica el build. No se deben generar ni copiar tokens de acceso al código; los
 SDK los gestionan durante la sesión. La configuración actual mantiene Firebase
 desactivado hasta que se rellenen esos valores.

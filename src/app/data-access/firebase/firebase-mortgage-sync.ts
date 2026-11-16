@@ -1,6 +1,11 @@
 import { Inject, Injectable, InjectionToken, signal } from '@angular/core';
-import { createId, type Mortgage } from './mortgage-calculator';
-import { parseMortgageFile, serializeMortgages, STORAGE_KEY } from './mortgage-storage';
+import { createId } from '../../domain/mortgage/mortgage-calculator';
+import type { Mortgage } from '../../domain/mortgage/mortgage.model';
+import {
+  parseMortgageFile,
+  serializeMortgages,
+  STORAGE_KEY,
+} from '../local-storage/mortgage-storage';
 import { FirebaseMortgageRepository } from './firebase-mortgage-repository';
 
 const USER_CACHE_PREFIX = `${STORAGE_KEY}:user:`;

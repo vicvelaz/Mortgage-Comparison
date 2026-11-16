@@ -17,8 +17,13 @@ import {
   LinearScale,
   Tooltip,
 } from 'chart.js';
-import { AmortizationRow, Mortgage, MortgageResult, Scenario } from './mortgage-calculator';
-import { ChartViewportComponent } from './chart-viewport';
+import type {
+  AmortizationRow,
+  Mortgage,
+  MortgageResult,
+  Scenario,
+} from '../../../domain/mortgage/mortgage.model';
+import { ChartViewportComponent } from '../../../shared/chart-viewport/chart-viewport';
 
 Chart.register(BarController, BarElement, CategoryScale, Legend, LinearScale, Tooltip);
 

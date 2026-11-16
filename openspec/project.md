@@ -9,16 +9,18 @@ Simulador y comparador de hipotecas para ayudar al cliente a elegir la mejor opc
 - Despliegue: GitHub Pages (SPA con fallback 404.html). Sin backend: los datos viven en `localStorage`.
 
 ## Archivos clave
-- `src/app/mortgage-calculator.ts`: motor de cálculo (sistema francés).
-- `src/app/workspace.ts` / `workspace.html`: un único componente que sirve `/dashboard`, `/mortgages` y `/comparison`.
-- `src/app/mortgage-validation.ts`: reglas de validación compartidas (creado al corregir los fallos F1 a F7; **precondición de estos cambios**).
+- `src/app/domain/mortgage/`: modelo, cálculo, constantes y validación de hipotecas.
+- `src/app/features/dashboard/workspace.ts` / `workspace.html`: componente único que sirve `/dashboard`, `/mortgages` y `/comparison`.
+- `src/app/data-access/`: almacenamiento local y repositorio/sincronización de Firebase.
+- `src/app/core/`: inicialización y autenticación de Firebase.
+- `src/app/features/`: componentes organizados por función; el Workspace conserva actualmente las vistas integradas.
 
 ## Convenciones
 - Textos de interfaz en español. Código y nombres de tipos en inglés.
 - Signals en lugar de observables para estado de UI. Estilo según `.prettierrc`.
 - Sin dependencias nuevas.
 - **Todo el dinero se calcula y compara en céntimos** (helper `cents`). La igualdad «importe == capital restante» se evalúa en céntimos.
-- Un test por cada escenario de especificación, en `src/app/*.spec.ts`.
+- Un test por cada escenario de especificación, junto al módulo correspondiente en `src/app/**/*.spec.ts`.
 
 ## Glosario del dominio
 - **Cuota ordinaria:** pago mensual contractual (intereses + capital programado).

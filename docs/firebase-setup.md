@@ -11,7 +11,7 @@ configurado por quien despliega la aplicación.
    Pages a los dominios autorizados.
 3. Registra la aplicación web en App Check con reCAPTCHA Enterprise.
 4. Copia la configuración web pública y la clave de sitio de App Check a
-   `src/app/firebase-config.ts` (detalles a continuación).
+   `src/app/core/firebase/firebase-config.ts` (detalles a continuación).
 5. Prueba las reglas con el emulador y despliega `firestore.rules`.
 6. Ejecuta los tests y genera el build de Pages. La sincronización estará activa
    en cuanto se publique ese build con la configuración Firebase.
@@ -50,7 +50,7 @@ configurado por quien despliega la aplicación.
    enforcement a Firestore. Mantén cualquier token de depuración fuera del
    repositorio y no habilites enforcement hasta verificar la integración.
 4. Copia la **site key** pública que registraste en App Check a
-   `FIREBASE_APP_CHECK_SITE_KEY` en `src/app/firebase-config.ts`:
+   `FIREBASE_APP_CHECK_SITE_KEY` en `src/app/core/firebase/firebase-config.ts`:
 
    ```ts
    export const FIREBASE_APP_CHECK_SITE_KEY: string | null = 'PUBLIC_SITE_KEY';
@@ -75,7 +75,7 @@ corresponden con estos valores:
 | `appId`                       | Configuración del SDK de la aplicación web                         |
 | `FIREBASE_APP_CHECK_SITE_KEY` | reCAPTCHA Enterprise, clave de sitio web registrada para App Check |
 
-Guarda esos valores en `src/app/firebase-config.ts`, que es el punto de
+Guarda esos valores en `src/app/core/firebase/firebase-config.ts`, que es el punto de
 configuración usado por esta implementación:
 
 ```ts

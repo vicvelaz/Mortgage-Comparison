@@ -23,6 +23,6 @@ Las ofertas guardadas solo en `localStorage` no se sincronizan entre dispositivo
 
 ## Impact
 
-- Angular: `src/app/app.config.ts`, `src/app/workspace.ts` y sus plantillas/estilos; el almacenamiento actual y sus pruebas en `src/app/mortgage-storage.ts` y `src/app/mortgage-storage.spec.ts`; repositorio Firestore que recompone las subcolecciones como una oferta v2.
+- Angular: `src/app/app.config.ts`, `src/app/features/dashboard/workspace.ts` y sus plantillas/estilos; el almacenamiento actual y sus pruebas en `src/app/data-access/local-storage/`; repositorio Firestore en `src/app/data-access/firebase/` que recompone las subcolecciones como una oferta v2.
 - Dependencias y configuración: SDK cliente de Firebase, configuración pública de Firebase para GitHub Pages y reglas de Firestore; no se usarán credenciales de cuenta de servicio.
 - Operación: proyecto Firebase Spark, proveedor Google autorizado, base Firestore en región europea y App Check configurados fuera de la aplicación. La autenticación debe funcionar en GitHub Pages, con alternativa de redirección si el navegador bloquea la ventana emergente.

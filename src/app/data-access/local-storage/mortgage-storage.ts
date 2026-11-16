@@ -1,4 +1,5 @@
-import {
+import { createId, maxAmortizableAt } from '../../domain/mortgage/mortgage-calculator';
+import type {
   Amortization,
   AmortizationMode,
   Bonus,
@@ -7,10 +8,11 @@ import {
   Mortgage,
   MonthlyBudget,
   Scenario,
-  createId,
-  maxAmortizableAt,
-} from './mortgage-calculator';
-import { validateCancellationFees, validateMortgage } from './mortgage-validation';
+} from '../../domain/mortgage/mortgage.model';
+import {
+  validateCancellationFees,
+  validateMortgage,
+} from '../../domain/mortgage/mortgage-validation';
 
 export const STORAGE_KEY = 'hipoteca-comparador-v2';
 export const LEGACY_STORAGE_KEY = 'hipoteca-comparador-v1';

@@ -9,7 +9,10 @@ import {
   signOut,
   type User,
 } from 'firebase/auth';
-import { initializeFirebaseApp, initializeFirebaseAppCheck } from './firebase-app';
+import {
+  initializeFirebaseApp,
+  initializeFirebaseAppCheck,
+} from '../firebase/firebase-app';
 
 export const FIREBASE_AUTH_SESSION_KEY = 'mortgage-comparison-auth-enabled';
 

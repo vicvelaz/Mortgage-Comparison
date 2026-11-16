@@ -28,29 +28,30 @@ import {
 } from 'chart.js';
 import { filter } from 'rxjs';
 import {
-  Mortgage,
-  MortgageResult,
-  Scenario,
   calculateMortgage,
   createId,
   relativeCostPer100,
-} from './mortgage-calculator';
-import { MortgageFormComponent } from './mortgage-form';
-import { AmortizationScheduleComponent } from './amortization-schedule';
-import { ChartViewportComponent } from './chart-viewport';
+} from '../../domain/mortgage/mortgage-calculator';
+import type { Mortgage, MortgageResult, Scenario } from '../../domain/mortgage/mortgage.model';
+import { MortgageFormComponent } from '../mortgages/mortgage-form/mortgage-form';
+import { AmortizationScheduleComponent } from '../mortgages/amortization/amortization-schedule';
+import { ChartViewportComponent } from '../../shared/chart-viewport/chart-viewport';
 import {
   STORAGE_KEY,
   loadMortgages,
   parseMortgageFile,
   serializeMortgages,
-} from './mortgage-storage';
-import { validateMortgage } from './mortgage-validation';
+} from '../../data-access/local-storage/mortgage-storage';
+import { validateMortgage } from '../../domain/mortgage/mortgage-validation';
 import {
   FirebaseAuthService,
   type FirebaseAuthState,
   type FirebaseUserSummary,
-} from './firebase-auth';
-import { FirebaseMortgageSyncService, reconcileGuestOffers } from './firebase-mortgage-sync';
+} from '../../core/auth/firebase-auth';
+import {
+  FirebaseMortgageSyncService,
+  reconcileGuestOffers,
+} from '../../data-access/firebase/firebase-mortgage-sync';
 const currencyFormatter = new Intl.NumberFormat('es-ES', {
   style: 'currency',
   currency: 'EUR',

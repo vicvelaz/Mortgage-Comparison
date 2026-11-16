@@ -4,16 +4,18 @@ import { FormsModule } from '@angular/forms';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatIconModule } from '@angular/material/icon';
 import {
-  Amortization,
-  Mortgage,
-  MortgageResult,
-  Scenario,
-  CancellationFees,
-  FeeTier,
   calculateMortgage,
   createId,
   maxAmortizableAt,
-} from './mortgage-calculator';
+} from '../../../domain/mortgage/mortgage-calculator';
+import type {
+  Amortization,
+  CancellationFees,
+  FeeTier,
+  Mortgage,
+  MortgageResult,
+  Scenario,
+} from '../../../domain/mortgage/mortgage.model';
 import {
   ScenarioValidationOptions,
   validateAmortization,
@@ -22,7 +24,7 @@ import {
   validateMonthlyBudget,
   validateMortgage,
   validateScenario,
-} from './mortgage-validation';
+} from '../../../domain/mortgage/mortgage-validation';
 
 const currencyFormatter = new Intl.NumberFormat('es-ES', {
   style: 'currency',

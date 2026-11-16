@@ -5,7 +5,7 @@ import {
 } from '@angular/core';
 import { provideRouter } from '@angular/router';
 import { routes } from './app.routes';
-import { initializeFirebaseApp } from './firebase-app';
+import { initializeFirebaseApp } from './core/firebase/firebase-app';
 
 export const appConfig: ApplicationConfig = {
   providers: [

@@ -1,6 +1,7 @@
 import { Routes } from '@angular/router';
 
-const loadWorkspace = () => import('./workspace').then((module) => module.Workspace);
+const loadWorkspace = () =>
+  import('./features/dashboard/workspace').then((module) => module.Workspace);
 
 export const routes: Routes = [
 	{

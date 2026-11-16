@@ -1,18 +1,20 @@
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
-import { routes } from './app.routes';
+import { routes } from '../../app.routes';
 import { Workspace } from './workspace';
-import { MortgageFormComponent } from './mortgage-form';
+import { MortgageFormComponent } from '../mortgages/mortgage-form/mortgage-form';
 import {
+  calculateMortgage as calculateScenario,
+  maxAmortizableAt,
+  relativeCostPer100,
+} from '../../domain/mortgage/mortgage-calculator';
+import type {
   Amortization,
   AmortizationMode,
   Bonus,
   Mortgage,
   Scenario,
-  calculateMortgage as calculateScenario,
-  maxAmortizableAt,
-  relativeCostPer100,
-} from './mortgage-calculator';
+} from '../../domain/mortgage/mortgage.model';
 
 type ScenarioInput = Omit<Scenario, 'mode'> & { mode?: AmortizationMode };
 type OfferOverrides = Partial<Omit<Mortgage, 'scenarios'>> & {
